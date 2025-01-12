@@ -17,5 +17,5 @@ tasks_app = AsyncIOScheduler()
 if __name__ == "__main__":
     register_tasks(app, tasks_app)
     register_handlers(app)
-    tasks_app.start()
+    # tasks_app.start() - Commented out because prompting an no running event loop [asyncio.get_running_loop()] error
     app.run()
