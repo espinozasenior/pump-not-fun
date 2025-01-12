@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.db
+.Python
+env/
+venv/
+.idea/
+*.session
+*.session-wal
+*.session-shm
+*.session-journal
