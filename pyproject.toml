@@ -1,0 +1,13 @@
+[project]
+name = "pump-not-fun"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "apscheduler>=3.10.4",
+    "pyrotgfork>=2.2.4",
+    "python-dotenv>=1.0.1",
+    "sqlalchemy>=2.0.37",
+    "tgcrypto>=1.2.5",
+]
