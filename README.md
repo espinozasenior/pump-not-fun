@@ -2,6 +2,8 @@
 
 A clean and scalable Telegram bot template using [Pyrotgfork](https://github.com/TelegramPlayGround/Pyrogram) (a forked version of [Pyrogram](https://github.com/pyrogram/pyrogram)) with multi-language support and SQLite database.
 
+Personal purpose to take advantage from telegram token finder channels and make my due diligences to buy and sell in Solana.
+
 ## ✨ Features
 
 - 🌐 Multi-language support with easy switching
@@ -9,18 +11,24 @@ A clean and scalable Telegram bot template using [Pyrotgfork](https://github.com
 - 📅 Task scheduling with APScheduler
 - 📁 Clean and organized folder structure
 - ⚙️ Environment variables management
+- ⚡️ **[Astral(uv)](https://github.com/astral-sh/uv)** - extremely fast Python package and project manager
 - 🎯 Decorator-based user handling
+- 💬 Catch messages from selected telegram chats (groups, channels, etc)
+- 🔍 Message handler to find pump fun token
+- ~~🛍️ Buy and Sell token as specific PNL~~
+- ~~Twitter(X) API integration to make due diligences~~
+
 
 ## 🚀 Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/tufcoding/telegram-bot-template.git
+   git clone https://github.com/espinozasenior/pump-not-fun.git
    ```
 
 2. **Install requirements:**
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
 3. **Configure environment variables:**
@@ -29,11 +37,12 @@ A clean and scalable Telegram bot template using [Pyrotgfork](https://github.com
    API_ID=your_api_id
    API_HASH=your_api_hash
    BOT_TOKEN=your_bot_token
+   SESSION_STRING=your session string token
    ```
 
 4. **Run the bot:**
    ```bash
-   python main.py
+   uv run main.py
    ```
 
 ## 📖 How to Use
@@ -42,7 +51,8 @@ Follow these simple steps to customize the bot:
 
 1. Add your commands in the `commands` folder
 2. Add your callbacks in the `callbacks` folder
-3. Register commands and callbacks in `handlers.py` file
+3. Add your messages handler in the `messages` folder
+3. Register commands, callbacks and messages handlers in `handlers.py` file
 4. Register tasks in `tasks.py` file
 5. Add new languages in the `languages` folder
 6. Create database models in the `database` folder
@@ -53,7 +63,7 @@ To upgrade to PostgreSQL:
 
 1. **Install PostgreSQL adapter:**
    ```bash
-   pip install psycopg2-binary
+   uv add psycopg2-binary
    ```
 
 2. **Update database configuration:**
