@@ -1,4 +1,4 @@
-from config.settings import API_ID, API_HASH, BOT_TOKEN
+from config.settings import API_ID, API_HASH, SESSION_STRING
 from bot.handlers import register_handlers
 from bot.tasks import register_tasks
 
@@ -6,10 +6,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pyrogram import Client
 
 app = Client(
-    "my_bot",
+    "pump-not-fun",
     api_id=API_ID,
     api_hash=API_HASH,
-    bot_token=BOT_TOKEN
+    session_string=SESSION_STRING
 )
 
 tasks_app = AsyncIOScheduler()
