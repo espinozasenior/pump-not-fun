@@ -11,3 +11,5 @@ SESSION_STRING = os.getenv("SESSION_STRING")
 
 # Database configuration
 DATABASE_URL = "sqlite:///database/bot.db"
+
+PUMP_FUN_CAS = [-1002439158541]
