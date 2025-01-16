@@ -1,13 +1,18 @@
 [project]
 name = "pump-not-fun"
-version = "0.1.0"
+version = "0.1.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiohttp>=3.11.11",
     "apscheduler>=3.10.4",
+    "base58>=2.1.1",
+    "datetime>=5.5",
     "pyrotgfork>=2.2.4",
     "python-dotenv>=1.0.1",
+    "solana>=0.36.2",
+    "solders>=0.23.0",
     "sqlalchemy>=2.0.37",
     "tgcrypto>=1.2.5",
 ]

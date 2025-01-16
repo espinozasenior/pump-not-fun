@@ -1,8 +1,10 @@
 from logger.logger import logger
+from config.settings import SOL_MINT, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS
 import re
 # from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from pyrogram import Client
+from bot.utils.jupiter_swap import swap
 
 async def pumpfun_message_handler(_:Client, message:Message):
     # Expresión regular para capturar el token
@@ -16,6 +18,7 @@ async def pumpfun_message_handler(_:Client, message:Message):
             try:
                 token = str(match.group(1)).strip()
                 logger.info(f"Token found: {token}")
+                await swap(SOL_MINT, token, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS)
             except (AttributeError, IndexError) as e:
                 logger.error(f"Error extracting token: {e}")
                 return
