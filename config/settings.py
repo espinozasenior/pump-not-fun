@@ -1,5 +1,7 @@
 from dotenv import load_dotenv
 import os
+from solana.rpc.api import Client
+from solders.keypair import Keypair #type: ignore
 
 load_dotenv()
 
@@ -19,5 +21,9 @@ SOL_AMOUNT = os.getenv("SOL_AMOUNT_TO_SPEND") # Amount of SOL to swap in lamport
 JUP_API = "https://quote-api.jup.ag/v6"
 # Database configuration
 DATABASE_URL = "sqlite:///database/bot.db"
+
+# Jupiter
+client = Client(SOLANA_RPC_NODE)
+payer_keypair = Keypair.from_base58_string(WALLET_PRIVATE_KEY)
 
 PUMP_FUN_CAS = [-1002439158541]

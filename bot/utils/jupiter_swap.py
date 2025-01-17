@@ -1,15 +1,18 @@
 from logger.logger import logger
-from config.settings import WALLET_PRIVATE_KEY, SOLANA_RPC_NODE, JUP_API
+from typing import Any, Dict, Optional
+from config.settings import SOLANA_RPC_NODE, JUP_API
 import asyncio
-import base58
 import base64
 import aiohttp
 import statistics
 import time
+import json
 from solana.rpc.async_api import AsyncClient
-from solders.keypair import Keypair
-from solders.transaction import VersionedTransaction
-from solders.compute_budget import set_compute_unit_price
+from solders.message import to_bytes_versioned  # type: ignore
+from solders.transaction import VersionedTransaction  # type: ignore
+from solana.rpc.commitment import Processed
+from solana.rpc.types import TxOpts
+from config.settings import payer_keypair
 
 async def get_recent_blockhash(client: AsyncClient):
     response = await client.get_latest_blockhash()
@@ -40,44 +43,23 @@ async def get_recent_prioritization_fees(client: AsyncClient, input_mint: str):
         logger.error(f"Error post {client._provider.endpoint_uri}: {str(e)}")
         return 0
 
-async def jupiter_swap(input_mint, output_mint, amount, auto_multiplier, slippage_bps=1000):
-    logger.info("Initializing Jupiter swap...")
-    wallet_private_key = Keypair.from_bytes(base58.b58decode(WALLET_PRIVATE_KEY))
-    wallet_address = wallet_private_key.pubkey()
-    logger.info(f"Wallet address: {wallet_address}")
-
-    async with AsyncClient(SOLANA_RPC_NODE) as client:
-        logger.info("Getting recent blockhash...")
-        recent_blockhash, last_valid_block_height = await get_recent_blockhash(client)
-        logger.info(f"Recent blockhash: {recent_blockhash}")
-        logger.info(f"Last valid block height: {last_valid_block_height}")
-
-        # logger.info("Getting recent prioritization fees...")
-        # try:
-        #     prioritization_fee = await get_recent_prioritization_fees(client, input_mint)
-        #     prioritization_fee *= auto_multiplier
-        #     logger.info(f"Prioritization fee: {prioritization_fee}")
-        # except Exception as e:
-        #     logger.error(f"Error getting prioritization fees: {str(e)}")
-        #     return 0
-
-    # logger.info(f"Total amount (including prioritization fee): {total_amount}")
-
-    logger.info("Getting quote from Jupiter...")
+async def get_quote(input_mint: str, output_mint: str, amount: int, slippage_bps: int) -> Optional[Dict[str, Any]]:
     quote_url = f"{JUP_API}/quote"
     quote_params = {
         "inputMint": input_mint,
         "outputMint": output_mint,
-        "amount": str(amount),
+        "amount": "100000000",
         "slippageBps": str(slippage_bps),
         "onlyDirectRoutes": "true",
-        "maxAccounts": str(64),
+        "maxAccounts": "64",
         "asLegacyTransaction": "true"
     }
+    headers = {'Accept': 'application/json'}
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 quote_url,
+                headers=headers,
                 params=quote_params,
                 timeout=10
             ) as response:
@@ -86,28 +68,31 @@ async def jupiter_swap(input_mint, output_mint, amount, auto_multiplier, slippag
                     logger.error(f"Jupiter quote API validation error: {error_data}")
                     return None
                 response.raise_for_status()
-                quote_response = await response.json()
-                logger.info(f"Quote response: {quote_response}")
+                return await response.json()
     except aiohttp.ClientError as e:
         logger.error(f"Error getting quote from Jupiter: {e}")
         return None
 
-    logger.info("Getting swap data from Jupiter...")
+async def get_swap(wallet_address: str, quote_response: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     swap_url = f"{JUP_API}/swap"
-    swap_data = {
+    swap_data = json.dumps({
         "quoteResponse": quote_response,
-        "userPublicKey": str(wallet_address),
+        "userPublicKey": wallet_address,
         "wrapAndUnwrapSol": True,
         "dynamicComputeUnitLimit": False,
         "prioritizationFeeLamports": "auto",
         "asLegacyTransaction": True
+    })
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
     }
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 swap_url,
-                json=swap_data,
-                headers={"Content-Type": "application/json"},
+                data=swap_data,
+                headers=headers,
                 timeout=10
             ) as response:
                 if response.status == 422:
@@ -122,34 +107,33 @@ async def jupiter_swap(input_mint, output_mint, amount, auto_multiplier, slippag
         logger.error(f"Error getting swap data from Jupiter: {str(e)}")
         return None
 
+async def jupiter_swap(input_mint, output_mint, amount, auto_multiplier, slippage_bps=1000):
+    logger.info("Initializing Jupiter swap...")
+    wallet_private_key = payer_keypair
+    wallet_address = str(wallet_private_key.pubkey())
+    quote_response = await get_quote(input_mint, output_mint, amount, slippage_bps)
+    swap_response = await get_swap(wallet_address, quote_response)
     logger.info("Creating and signing transaction...")
     async with AsyncClient(SOLANA_RPC_NODE) as client:
         try:
-            swap_transaction = swap_response['swapTransaction']
-            logger.info(f"Swap transaction length: {len(swap_transaction)}")
-            logger.info(f"Swap transaction type: {type(swap_transaction)}")
-            
-            transaction_bytes = base64.b64decode(swap_transaction)
-            logger.info(f"Decoded transaction length: {len(transaction_bytes)}")
-            
-            unsigned_tx = VersionedTransaction.from_bytes(transaction_bytes)
-            logger.info(f"Deserialized transaction: {unsigned_tx}")
-
-            # Add ComputeBudget instruction to do the prioritization fee as implemented in solders
-            # compute_budget_ix = set_compute_unit_price(int(prioritization_fee))
-            # unsigned_tx.message.instructions.insert(0, compute_budget_ix)
-            
-            signed_tx = VersionedTransaction(unsigned_tx.message, [wallet_private_key])
-            
-            logger.info(f"Final transaction to be sent: {signed_tx}")
-            
+            unsigned_tx = VersionedTransaction.from_bytes(
+                base64.b64decode(swap_response['swapTransaction'])
+            )
+            signature = payer_keypair.sign_message(to_bytes_versioned(unsigned_tx.message))
+            signed_txn = VersionedTransaction.populate(unsigned_tx.message, [signature])
+            opts = TxOpts(skip_preflight=True, preflight_commitment=Processed)
+            # logger.info("Signing transaction...")
+            # signed_tx = VersionedTransaction(unsigned_tx.message, [wallet_private_key])
+            # logger.info(f"Final transaction to be sent: {signed_tx}")
             logger.info("Sending transaction...")
-            result = await client.send_transaction(signed_tx)
-            logger.info("Transaction sent.")
-            tx_signature = result.value
-            tx_details = await client.get_transaction(tx_signature)
-            logger.info(f"Confirmed transaction details: {tx_details}")
-            return result
+            try:
+                txn_sig = await client.send_raw_transaction(
+                    txn=bytes(signed_txn), opts=opts
+                )
+                return txn_sig            
+            except Exception as e:
+                logger.error(f"Failed to send transaction: {str(e)}")
+                return False
         except Exception as e:
             logger.error(f"Error creating or sending transaction: {str(e)}")
             return None
@@ -162,7 +146,7 @@ async def wait_for_confirmation(client, signature, max_timeout=60):
             if status.value[0] is not None:
                 return status.value[0].confirmation_status
         except Exception as e:
-            logger.error(f"Error checking transaction status: {e}")
+            logger.warning(f"Checking transaction status failed... {e}")
         await asyncio.sleep(1)
     return None
 
