@@ -22,7 +22,10 @@ async def pumpfun_message_handler(_:Client, message:Message):
             except (AttributeError, IndexError) as e:
                 logger.error(f"Error extracting token: {e}")
                 return
+        else:
+            logger.info("Not a pump token")
 
+        # TODO: Find socials and name through caption's entities array
         # logger.info(f"Message entities: {message.caption}")
         # for entity in message.caption_entities:
         #     if entity.type == MessageEntityType.CODE:
