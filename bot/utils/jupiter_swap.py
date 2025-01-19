@@ -13,6 +13,7 @@ from solders.transaction import VersionedTransaction  # type: ignore
 from solana.rpc.commitment import Processed
 from solana.rpc.types import TxOpts
 from config.settings import payer_keypair
+from bot.utils.playsound import play_buy_sound
 
 async def get_recent_blockhash(client: AsyncClient):
     response = await client.get_latest_blockhash()
@@ -179,6 +180,7 @@ async def swap(input_mint, output_mint, amount, auto_multiplier = 1.1, slippage_
             solscan_url = f"https://solscan.io/tx/{tx_signature}"
             logger.info(f"Transaction signature: {tx_signature}")
             logger.info(f"Solscan link: {solscan_url}")
+            play_buy_sound()
             logger.info("Waiting for transaction confirmation...")
             async with AsyncClient(SOLANA_RPC_NODE) as client:
                 confirmation_status = await wait_for_confirmation(client, tx_signature)
