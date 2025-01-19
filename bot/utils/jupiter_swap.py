@@ -84,7 +84,7 @@ async def get_swap(wallet_address: str, quote_response: Dict[str, Any]) -> Optio
         "asLegacyTransaction": True,
         "prioritizationFeeLamports": {
             "priorityLevelWithMaxLamports": {
-                "maxLamports": 300000000, # 0.003 sol
+                "maxLamports": 30000000, # 0.003 sol
                 "priorityLevel": "veryHigh"
             }
         }        
