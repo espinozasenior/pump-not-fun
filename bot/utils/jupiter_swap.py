@@ -1,5 +1,5 @@
 from logger.logger import logger
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 from config.settings import SOLANA_RPC_NODE, JUP_API
 import asyncio
 import base64
@@ -156,14 +156,9 @@ async def wait_for_confirmation(client, signature, max_timeout=60):
         await asyncio.sleep(1)
     return None
 
-async def swap(input_mint, output_mint, amount, auto_multiplier = 1.1, slippage_bps = 1000):
+async def swap(input_mint: str, output_mint: str, amount: Union[str, float, int], auto_multiplier: float = 1.1, slippage_bps: int = 1000):
     try:
-        if auto_multiplier is not float:
-            auto_multiplier = float(auto_multiplier)
-        if slippage_bps is not int:
-            slippage_bps = int(slippage_bps)
-        if amount is not int:
-            amount = int(amount)
+        amount = float(amount)
         logger.info("Starting Jupiter swap...")
         logger.info(f"Input mint: {input_mint}")
         logger.info(f"Output mint: {output_mint}")
