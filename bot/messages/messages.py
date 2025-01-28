@@ -1,10 +1,49 @@
 from logger.logger import logger
-from config.settings import SOL_MINT, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS
+from config.settings import SOL_MINT, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS, ALLOWED_USERS
 import re
 # from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from pyrogram import Client
 from bot.utils.jupiter_swap import swap
+from bot.utils.token import get_top_holders, get_token_profile, get_token_stats
+
+async def user_in_chat_message_handler(_:Client, message:Message):
+    # Expresión regular para capturar el token
+    pump_fun_pattern = r"\b([A-Za-z0-9]+pump)\b"
+     # Check if message is from allowed chat
+    if not message.from_user or message.from_user.id not in ALLOWED_USERS:
+        return
+
+    if message.caption is not None:
+        logger.info(f"New msg from: {message.chat.title}")
+        logger.info(f"Member: {message.from_user.full_name}")
+        # Buscar el token pumpfun en publicaciones con caption (photos)
+        match = re.search(pump_fun_pattern, message.caption)
+        if match:
+            try:
+                token = str(match.group(1)).strip()
+                logger.info(f"Token found: {token}")
+                await swap(SOL_MINT, token, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS)
+            except (AttributeError, IndexError) as e:
+                logger.error(f"Error extracting token: {e}")
+                return
+        else:
+            logger.info("Not a pump token in caption")
+    if message.text is not None:
+        logger.info(f"New msg from: {message.chat.title}")
+        logger.info(f"Member: {message.from_user.full_name}")
+        # Buscar el token pumpfun en publicaciones de texto
+        match = re.search(pump_fun_pattern, message.text)
+        if match:
+            try:
+                token = str(match.group(1)).strip()
+                logger.info(f"Token found: {token}")
+                await swap(SOL_MINT, token, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS)
+            except (AttributeError, IndexError) as e:
+                logger.error(f"Error extracting token: {e}")
+                return
+        else:
+            logger.info("Not a pump token in member post")
 
 async def pumpfun_message_handler(_:Client, message:Message):
     # Expresión regular para capturar el token
@@ -18,7 +57,10 @@ async def pumpfun_message_handler(_:Client, message:Message):
             try:
                 token = str(match.group(1)).strip()
                 logger.info(f"Token found: {token}")
-                await swap(SOL_MINT, token, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS)
+                await get_token_profile(token)
+                await get_token_stats(token)
+                await get_top_holders(token)
+                # await swap(SOL_MINT, token, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS)
             except (AttributeError, IndexError) as e:
                 logger.error(f"Error extracting token: {e}")
                 return
