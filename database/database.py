@@ -74,6 +74,7 @@ class SmartWallet(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     address = Column(String, unique=True)
+    name = Column(String, nullable=True, unique=True)
     first_seen = Column(DateTime, default=datetime.now(UTC))
     last_active = Column(DateTime, default=datetime.now(UTC))
     profit_rate = Column(Float, default=0.0)
