@@ -1,7 +1,17 @@
 from logger.logger import logger
-from typing import Any, Dict, Optional, Union
+from database.database import AsyncSession, Token
+from typing import Any, Dict, Optional, TypedDict
 import aiohttp
+import asyncio
 import pandas as pd
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.dialects.postgresql import insert
+from datetime import datetime
+
+class TokenInfo(TypedDict):
+    holders: dict
+    profile: dict 
+    stats: dict
 
 GMGN_BASE_URL="https://gmgn.ai/defi/quotation/v1"
 quote_params = {
@@ -84,7 +94,18 @@ async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
                 print(f"7. Average profit percent: {profit_percent:.2f}%")
                 print(f"8. Funded from same address: {same_address_funded}")
                 print(f"9. Wallet addresses that funded multiple wallets: {common_addresses}")
-                return None
+
+                return {
+                    'fresh_wallets': int(fresh_wallets),
+                    'sold_wallets': sold_wallets,
+                    'suspicious_wallets': suspicious_wallets,
+                    'insiders_wallets': insiders_count,
+                    'phishing_wallets': phishing_count,
+                    'profitable_wallets': profitable_wallets,
+                    'avg_profit_percent': profit_percent,
+                    'same_address_funded': same_address_funded,
+                    'common_addresses': common_addresses.to_dict()
+                }
     except aiohttp.ClientError as e:
         logger.error(f"Error getting quote from Jupiter: {e}")
         return None
@@ -109,22 +130,19 @@ async def get_token_profile(token: str) -> Optional[Dict[str, Any]]:
                 # Extract the 'link' object
                 link_data = json_data['data']['link']
 
-                # Validate if fields exist and are non-empty
-                has_twitter = bool(link_data.get('twitter_username', '').strip())
-                has_website = bool(link_data.get('website', '').strip())
-                has_telegram = bool(link_data.get('telegram', '').strip())
-                has_github = bool(link_data.get('github', '').strip())
+                # # Validate if fields exist and are non-empty
+                # has_twitter = bool(link_data.get('twitter_username', '').strip())
+                # has_website = bool(link_data.get('website', '').strip())
+                # has_telegram = bool(link_data.get('telegram', '').strip())
+                # has_github = bool(link_data.get('github', '').strip())
 
-                # Display the results
-                print(f"Has Twitter: {has_twitter}")
-                print(f"{link_data.get('twitter_username', '').strip()}")
-                print(f"Has Website: {has_website}")
-                print(f"{link_data.get('website', '').strip()}")
-                print(f"Has Telegram: {has_telegram}")
-                print(f"{link_data.get('telegram', '').strip()}")
-                print(f"Has GitHub: {has_github}")
-                print(f"{link_data.get('github', '').strip()}")
-                return None
+                return {
+                    'ca': token,
+                    'twitter': link_data.get('twitter_username', '').strip(),
+                    'website': link_data.get('website', '').strip(),
+                    'telegram': link_data.get('telegram', '').strip(),
+                    'github': link_data.get('github', '').strip()
+                }
     except aiohttp.ClientError as e:
         logger.error(f"Error getting quote from Jupiter: {e}")
         return None
@@ -147,9 +165,96 @@ async def get_token_stats(token: str) -> Optional[Dict[str, Any]]:
                 json_data = await response.json()
                 # Assuming the JSON data is stored in a variable called 'data'
                 stats = json_data['data']
-                print(f"Holders: {stats.get('holder_count', '')}")
+                print(f"Holders: {int(stats.get('holder_count', ''))}")
                 print(f"Bluechip Owner %: {float(stats.get('bluechip_owner_percentage', '').strip()) * 100}")
                 print(f"Insiders %: {float(stats.get('top_rat_trader_percentage', '').strip()) * 100}")
+                return {
+                    'holders': int(stats.get('holder_count', '')),
+                    'bc_owners_percent': float(stats.get('bluechip_owner_percentage', '').strip()) * 100,
+                    'insiders_percent': float(stats.get('top_rat_trader_percentage', '').strip()) * 100
+                }
     except aiohttp.ClientError as e:
         logger.error(f"Error getting quote from Jupiter: {e}")
         return None
+
+async def get_token_info(token: str) -> Optional[Dict]:
+    try:
+        # Run all requests concurrently
+        results = await asyncio.gather(
+            get_top_holders(token),
+            get_token_profile(token),
+            get_token_stats(token),
+            return_exceptions=True
+        )
+        
+        # Check if any request failed
+        if any(isinstance(result, Exception) for result in results):
+            logger.error("One or more requests failed")
+            return None
+            
+        holders, profile, stats = results
+        
+        # Validate required data
+        if not all([holders, profile, stats]):
+            logger.error("Missing required token data")
+            return None
+            
+        return {
+            "holders": holders,
+            "profile": profile,
+            "stats": stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting token info: {e}")
+        return None
+    
+async def save_token_info(token_info: Dict[str, Any]) -> bool:
+    try:
+        async with AsyncSession() as session:
+            # Add helper function to safely convert values
+            def get_native_int(val):
+                return int(val.item()) if hasattr(val, 'item') else int(val)
+            
+            def get_native_float(val):
+                return float(val.item()) if hasattr(val, 'item') else float(val)
+
+            update_values = {
+                'symbol': None,  # Explicitly set to None since we're ignoring symbols
+                'twitter': token_info['profile']['twitter'],
+                'github': token_info['profile']['github'],
+                'telegram': token_info['profile']['telegram'],
+                'website': token_info['profile']['website'],
+                'holders': token_info['stats']['holders'],
+                'bc_owners_percent': get_native_float(token_info['stats']['bc_owners_percent']),
+                'insiders_percent': get_native_float(token_info['stats']['insiders_percent']),
+                'avg_profit_percent': get_native_float(token_info['holders']['avg_profit_percent']),
+                'fresh_wallets': get_native_int(token_info['holders']['fresh_wallets']),
+                'sold_wallets': get_native_int(token_info['holders']['sold_wallets']),
+                'suspicious_wallets': get_native_int(token_info['holders']['suspicious_wallets']),
+                'insiders_wallets': get_native_int(token_info['holders']['insiders_wallets']),
+                'phishing_wallets': get_native_int(token_info['holders']['phishing_wallets']),
+                'profitable_wallets': get_native_int(token_info['holders']['profitable_wallets']),
+                'same_address_funded': get_native_int(token_info['holders']['same_address_funded']),
+                'created_date': datetime.utcnow()  # Add this line to create timezone-naive UTC datetime
+            }
+
+            stmt = insert(Token).values(
+                ca=token_info['profile']['ca'],
+                **update_values
+            ).on_conflict_do_update(
+                index_elements=['ca'],
+                set_=update_values
+            )
+
+            await session.execute(stmt)
+            await session.commit()
+            return True
+            
+    except (IntegrityError, SQLAlchemyError) as e:
+        logger.error(f"DB error saving token: {e}")
+        return False
+    except KeyError as e:
+        logger.error(f"Missing field in token info: {e}")
+        return False
+    

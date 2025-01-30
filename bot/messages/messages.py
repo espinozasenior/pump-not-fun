@@ -5,7 +5,7 @@ import re
 from pyrogram.types import Message
 from pyrogram import Client
 from bot.utils.jupiter_swap import swap
-from bot.utils.token import get_top_holders, get_token_profile, get_token_stats
+from bot.utils.token import get_token_info, save_token_info
 
 async def user_in_chat_message_handler(_:Client, message:Message):
     # Expresión regular para capturar el token
@@ -57,9 +57,9 @@ async def pumpfun_message_handler(_:Client, message:Message):
             try:
                 token = str(match.group(1)).strip()
                 logger.info(f"Token found: {token}")
-                await get_token_profile(token)
-                await get_token_stats(token)
-                await get_top_holders(token)
+                token_info = await get_token_info(token)
+                if token_info is not None:
+                    await save_token_info(token_info)
                 # await swap(SOL_MINT, token, SOL_AMOUNT, AUTO_MULTIPLIER, SLIPPAGE_BPS)
             except (AttributeError, IndexError) as e:
                 logger.error(f"Error extracting token: {e}")
