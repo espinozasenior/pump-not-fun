@@ -13,3 +13,4 @@ venv/
 *.session-wal
 *.session-shm
 *.session-journal
+.aider*
