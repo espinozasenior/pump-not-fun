@@ -20,7 +20,7 @@ SLIPPAGE_BPS = os.getenv("SOLANA_SLIPPAGE_BPS") # slippage tolerance 1000 = 10%
 SOL_AMOUNT = os.getenv("SOL_AMOUNT_TO_SPEND") # Amount of SOL to swap in lamports
 JUP_API = "https://quote-api.jup.ag/v6"
 # Database configuration
-DATABASE_URL = "sqlite:///database/bot.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Jupiter
 client = Client(SOLANA_RPC_NODE)

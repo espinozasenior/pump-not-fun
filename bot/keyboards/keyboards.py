@@ -21,3 +21,13 @@ def get_start_keyboard(lang_code: str):
             ]
         ]
     )
+
+def get_buy_button(token_address: str):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "📈 Chart", 
+                url=f"https://dexscreener.com/solana/{token_address}"
+            )
+        ]
+    ])

@@ -10,15 +10,17 @@ from datetime import datetime
 
 class TokenInfo(TypedDict):
     holders: dict
-    profile: dict 
+    links: dict 
     stats: dict
+    profile:dict
 
 GMGN_BASE_URL="https://gmgn.ai/defi/quotation/v1"
+
 quote_params = {
     "device_id": "dd94f200-d3fc-46fb-8ccb-194706af0789",
-    "client_id": "gmgn_web_2025.0126.145122",
+    "client_id": "gmgn_web_2025.0128.214338",
     "from_app": "gmgn",
-    "app_ver": "2025.0126.145122",
+    "app_ver": "2025.0128.214338",
     "tz_name": "America/Chicago",
     "tz_offset": "-21600",
     "app_lang": "en",
@@ -55,6 +57,13 @@ async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
                 # Assuming the JSON data is stored in a variable called 'data'
                 df = pd.DataFrame(json_data['data'])
 
+                # Define wallets to exclude
+                EXCLUDED_ADDRESSES = {
+                    "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9", #Binance
+                    "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg", #Pumpfun
+                    "AeBwztwXScyNNuQCEdhS54wttRQrw3Nj1UtqddzB4C7b", #RobinHood
+                }
+
                 # 1. Fresh wallets (is_new = True)
                 fresh_wallets = df['is_new'].sum()
 
@@ -77,8 +86,14 @@ async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
                 mask = df['cost_cur'] > 0
                 profit_percent = (df[mask]['profit'] / df[mask]['cost_cur']).mean() * 100
 
-                # 6. Funded from same wallet address
-                from_address_counts = df['native_transfer'].apply(lambda x: x['from_address']).value_counts()
+                # 6. Funded from same wallet address (excluding specific wallets)
+                from_address_counts = (
+                    df['native_transfer']
+                    .apply(lambda x: x['from_address'] 
+                           if x['from_address'] not in EXCLUDED_ADDRESSES
+                           else None)
+                    .value_counts(dropna=True)
+                )
                 same_address_funded = from_address_counts[from_address_counts > 1].sum()
 
                 # Filter addresses that appear more than once
@@ -110,7 +125,45 @@ async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
         logger.error(f"Error getting quote from Jupiter: {e}")
         return None
 
+
 async def get_token_profile(token: str) -> Optional[Dict[str, Any]]:
+    quote_url = f"https://gmgn.ai/api/v1/mutil_window_token_info"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                quote_url,
+                headers=headers,
+                params=quote_params,
+                json={"chain":"sol","addresses":[token]},
+                timeout=10
+            ) as response:
+                if response.status == 422:
+                    error_data = await response.json()
+                    logger.error(f"Jupiter quote API validation error: {error_data}")
+                    return None
+                response.raise_for_status()
+                json_data = await response.json()
+                # Assuming the JSON data is stored in a variable called 'data'
+                profile = json_data['data'][0]
+                print(f"Holders: {int(profile.get('holder_count', 0))}")
+                result = {
+                    'ca': token,
+                    'holders': int(profile.get('holder_count', 0)),
+                    'symbol': profile.get('symbol', ''),
+                    'logo': profile.get('logo', ''),
+                    'name': profile.get('name', ''),
+                    'price': float(profile.get('price').get('price', 0.0)),
+                    'top_10_holder_rate': float(profile.get('dev').get('top_10_holder_rate', 0.00)) * 100,
+                    'volume_1h': float(profile.get('price').get('volume_1h', 0.0)),
+                    'volume_5m': float(profile.get('price').get('volume_5m', 0.0)),
+                    'liquidity': float(profile.get('liquidity', 0.0)),
+                }
+                return result
+    except aiohttp.ClientError as e:
+        logger.error(f"Error getting quote from Jupiter: {e}")
+        return None
+
+async def get_token_links(token: str) -> Optional[Dict[str, Any]]:
     quote_url = f"https://gmgn.ai/api/v1/mutil_window_token_link_rug_vote/sol/{token}"
     try:
         async with aiohttp.ClientSession() as session:
@@ -137,7 +190,6 @@ async def get_token_profile(token: str) -> Optional[Dict[str, Any]]:
                 # has_github = bool(link_data.get('github', '').strip())
 
                 return {
-                    'ca': token,
                     'twitter': link_data.get('twitter_username', '').strip(),
                     'website': link_data.get('website', '').strip(),
                     'telegram': link_data.get('telegram', '').strip(),
@@ -182,8 +234,9 @@ async def get_token_info(token: str) -> Optional[Dict]:
         # Run all requests concurrently
         results = await asyncio.gather(
             get_top_holders(token),
-            get_token_profile(token),
+            get_token_links(token),
             get_token_stats(token),
+            get_token_profile(token),
             return_exceptions=True
         )
         
@@ -192,17 +245,18 @@ async def get_token_info(token: str) -> Optional[Dict]:
             logger.error("One or more requests failed")
             return None
             
-        holders, profile, stats = results
+        holders, links, stats, profile = results
         
         # Validate required data
-        if not all([holders, profile, stats]):
+        if not all([holders, links, stats]):
             logger.error("Missing required token data")
             return None
             
         return {
             "holders": holders,
-            "profile": profile,
-            "stats": stats
+            "links": links,
+            "stats": stats,
+            "profile": profile
         }
         
     except Exception as e:
@@ -220,12 +274,20 @@ async def save_token_info(token_info: Dict[str, Any]) -> bool:
                 return float(val.item()) if hasattr(val, 'item') else float(val)
 
             update_values = {
-                'symbol': None,  # Explicitly set to None since we're ignoring symbols
-                'twitter': token_info['profile']['twitter'],
-                'github': token_info['profile']['github'],
-                'telegram': token_info['profile']['telegram'],
-                'website': token_info['profile']['website'],
-                'holders': token_info['stats']['holders'],
+                'ca': token_info['profile']['ca'],
+                'symbol': token_info['profile']['symbol'],
+                'name': token_info['profile']['name'],
+                'holders': token_info['profile']['holders'],
+                'logo': token_info['profile']['logo'],
+                'price': token_info['profile']['price'],
+                'top_10_holder_rate': token_info['profile']['top_10_holder_rate'],
+                'volume_1h': token_info['profile']['volume_1h'],
+                'volume_5m': token_info['profile']['volume_5m'],
+                'liquidity': token_info['profile']['liquidity'],
+                'twitter': token_info['links']['twitter'],
+                'github': token_info['links']['github'],
+                'telegram': token_info['links']['telegram'],
+                'website': token_info['links']['website'],
                 'bc_owners_percent': get_native_float(token_info['stats']['bc_owners_percent']),
                 'insiders_percent': get_native_float(token_info['stats']['insiders_percent']),
                 'avg_profit_percent': get_native_float(token_info['holders']['avg_profit_percent']),
@@ -240,7 +302,6 @@ async def save_token_info(token_info: Dict[str, Any]) -> bool:
             }
 
             stmt = insert(Token).values(
-                ca=token_info['profile']['ca'],
                 **update_values
             ).on_conflict_do_update(
                 index_elements=['ca'],
