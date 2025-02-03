@@ -49,7 +49,7 @@ async def get_quote(input_mint: str, output_mint: str, amount: int, slippage_bps
     quote_params = {
         "inputMint": input_mint,
         "outputMint": output_mint,
-        "amount": "100000000",
+        "amount": "1000000000",  # 1.0 sol
         "slippageBps": str(slippage_bps),
         "onlyDirectRoutes": "true",
         "maxAccounts": "64",
@@ -84,7 +84,7 @@ async def get_swap(wallet_address: str, quote_response: Dict[str, Any]) -> Optio
         "asLegacyTransaction": True,
         "prioritizationFeeLamports": {
             "priorityLevelWithMaxLamports": {
-                "maxLamports": 30000000, # 0.003 sol
+                "maxLamports": 500000000, # 0.05 sol
                 "priorityLevel": "veryHigh"
             }
         }        
