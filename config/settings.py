@@ -26,4 +26,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 client = Client(SOLANA_RPC_NODE)
 payer_keypair = Keypair.from_base58_string(WALLET_PRIVATE_KEY)
 
+HOMIES_CHAT_ID = os.getenv("HOMIES_CHAT_ID")
 PUMP_FUN_CAS = [-1002439158541]
+
+# Helius configuration
+HELIUS_API_KEY = os.getenv("HELIUS_API_KEY")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+WALLETS = []
