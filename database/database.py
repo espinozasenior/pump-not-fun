@@ -1,10 +1,12 @@
-from config.settings import DATABASE_URL
+from config.settings import DATABASE_URL, HELIUS_API_KEY
 
 from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from datetime import datetime, UTC
+from typing import AsyncGenerator
+import base58
 
 Base = declarative_base()
 
@@ -67,7 +69,32 @@ class Token(Base):
     is_active = Column(Boolean, default=True)
     # Update relationships
     holdings = relationship("SmartWalletHolding", back_populates="token")
-    wallets = relationship("SmartWallet", secondary="smart_wallet_holding", back_populates="tokens")
+    wallets = relationship(
+        "SmartWallet", 
+        secondary="smart_wallet_holding", 
+        back_populates="tokens",
+        viewonly=True,
+        overlaps="holdings,token"
+    )
+
+class WalletHoldingHistory(Base):
+    __tablename__ = "wallet_holding_history"
+    
+    id = Column(Integer, primary_key=True)
+    wallet_address = Column(
+        String, 
+        ForeignKey('smart_wallets.address'),  # Add this foreign key
+        index=True
+    )
+    token_mint = Column(String, index=True)  # Store token CA directly
+    first_seen = Column(DateTime(timezone=True), default=datetime.now(UTC))
+    last_seen = Column(DateTime(timezone=True), default=datetime.now(UTC))
+
+    wallet = relationship(
+        "SmartWallet", 
+        back_populates="holding_history",
+        foreign_keys=[wallet_address]  # Add this relationship
+    )
 
 class SmartWallet(Base):
     __tablename__ = "smart_wallets"
@@ -81,8 +108,40 @@ class SmartWallet(Base):
     total_trades = Column(Integer, default=0)
     
     # Fix relationships
-    holdings = relationship("SmartWalletHolding", back_populates="wallet")  # Add this line
-    tokens = relationship("Token", secondary="smart_wallet_holding", back_populates="wallets")
+    holdings = relationship("SmartWalletHolding", back_populates="wallet")
+    tokens = relationship(
+        "Token", 
+        secondary="smart_wallet_holding", 
+        back_populates="wallets",
+        viewonly=True,
+        overlaps="holdings,wallet"
+    )
+    holding_history = relationship(
+        "WalletHoldingHistory",
+        back_populates="wallet",  # Change backref to back_populates
+        foreign_keys="WalletHoldingHistory.wallet_address",  # Add explicit foreign key
+        cascade="all, delete-orphan"
+    )
+
+    @classmethod
+    async def is_valid_address(cls, address: str) -> bool:
+        """Validate Solana wallet using format checks + Helius API"""
+        # First perform basic format validation
+        if len(address) != 44:
+            return False
+            
+        valid_chars = set("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+        if not all(c in valid_chars for c in address):
+            return False
+            
+        try:
+            decoded = base58.b58decode(address)
+            if len(decoded) != 32:
+                return False
+        except Exception:
+            return False
+
+        return True
 
 
 engine = create_async_engine(
@@ -102,6 +161,13 @@ async def init_db():
         # Create fresh tables with latest schema
         await conn.run_sync(Base.metadata.create_all)
 
-AsyncSession = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+AsyncSessionFactory = async_sessionmaker(
+    engine, 
+    class_=AsyncSession,
+    expire_on_commit=False
 )
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionFactory() as session:
+        yield session
