@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+
+# Fix Python path for Render
+sys.path.append(str(Path(__file__).parent.parent.resolve()))
+
 from dotenv import load_dotenv
 import os
 from solana.rpc.api import Client
