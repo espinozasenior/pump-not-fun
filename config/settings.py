@@ -28,6 +28,7 @@ payer_keypair = Keypair.from_base58_string(WALLET_PRIVATE_KEY)
 
 HOMIES_CHAT_ID = os.getenv("HOMIES_CHAT_ID")
 PUMP_FUN_CAS = [-1002439158541]
+ALLOWED_USERS = os.getenv("ALLOWED_USERS")
 
 # Helius configuration
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY")
