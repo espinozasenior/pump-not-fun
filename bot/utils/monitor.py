@@ -123,15 +123,18 @@ async def process_webhook(request_data: dict, client: Client):
                 if txn.get("source") == "PUMP_FUN":
                     # Get wallet addresse involved in the swap
                     owner = txn.get("tokenTransfers", None)[0].get("toUserAccount")
+                    if not owner:                                          
+                        logger.error("No owner in token transfer")         
+                        return
                     # Query to find a wallet by address
                     query = select(SmartWallet).where(SmartWallet.address == owner)
                     result = await session.execute(query)
                     
                     # Fetch the first result (if any)
-                    wallet = result.scalars().first()
-                    # if not wallet:
-                    #     logger.error(f"Wallet not found: {owner}")
-                    #     return None
+                    wallet = result.scalar_one_or_none()
+                    if not wallet:                                         
+                        logger.warning(f"Unknown wallet performed swap: {owner}")                                                                  
+                        return 
                     # Format message details
                     token = txn.get("tokenTransfers", {})[0]
                     text=(
@@ -141,10 +144,16 @@ async def process_webhook(request_data: dict, client: Client):
                     )
                 else:
                     owner = txn.get("feePayer", None)
+                    if not owner:                                          
+                        logger.error("No owner in token transfer")         
+                        return
                     # Query to find a wallet by address
                     query = select(SmartWallet).where(SmartWallet.address == owner)
                     result = await session.execute(query)
-                    wallet = result.scalars().first()
+                    wallet = result.scalar_one_or_none()
+                    if not wallet:                                         
+                        logger.warning(f"Unknown wallet performed swap: {owner}")                                                                  
+                        return 
                     token_a = txn.get("tokenTransfers", {})[0]
                     token_b = txn.get("tokenTransfers", {})[1]
                     text=(
