@@ -23,3 +23,12 @@ dependencies = [
     "tgcrypto>=1.2.5",
     "uvicorn>=0.34.0",
 ]
+
+[build-system]
+requires = ["setuptools>=65.5.1", "wheel>=0.38.4"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bot*", "config*", "database*"]
+exclude = ["tests*", "scripts*"]

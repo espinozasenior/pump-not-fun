@@ -16,3 +16,5 @@ sqlalchemy>=2.0.37
 tgcrypto>=1.2.5
 uvicorn>=0.34.0
 greenlet>=3.0.3
+setuptools>=65.5.1                                                         
+wheel>=0.38.4 

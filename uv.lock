@@ -451,7 +451,7 @@ wheels = [
 [[package]]
 name = "pump-not-fun"
 version = "0.1.1"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "apscheduler" },
