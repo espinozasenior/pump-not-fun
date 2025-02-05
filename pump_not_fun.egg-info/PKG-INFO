@@ -4,20 +4,23 @@ Version: 0.1.1
 Summary: Add your description here
 Home-page: https://github.com/espinozasenior/pump-not-fun
 Author: TUF Coding
-Requires-Python: >=3.13
+Requires-Python: ==3.11.*
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: aiohttp>=3.11.11
 Requires-Dist: apscheduler>=3.10.4
+Requires-Dist: asyncpg>=0.30.0
 Requires-Dist: base58>=2.1.1
 Requires-Dist: datetime>=5.5
 Requires-Dist: fastapi>=0.115.8
+Requires-Dist: greenlet>=3.1.1
 Requires-Dist: pandas>=2.2.3
 Requires-Dist: playsound>=1.3.0
 Requires-Dist: pyngrok>=7.2.3
 Requires-Dist: pyobjc>=11.0
 Requires-Dist: pyrotgfork>=2.2.4
 Requires-Dist: python-dotenv>=1.0.1
+Requires-Dist: requests>=2.32.3
 Requires-Dist: solana>=0.36.2
 Requires-Dist: solders>=0.23.0
 Requires-Dist: sqlalchemy>=2.0.37

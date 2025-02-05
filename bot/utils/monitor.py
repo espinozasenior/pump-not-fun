@@ -158,8 +158,8 @@ async def process_webhook(request_data: dict, client: Client):
                     token_b = txn.get("tokenTransfers", {})[1]
                     text=(
                         f"🔄 Swap detected from: {wallet.name}\n"
-                        f"Swapped {token_a.get('tokenAmount', 0):.2f} {"SOL" if token_a.get('mint') == "So11111111111111111111111111111111111111112" else token_a.get('mint')}\n"
-                        f"for {token_b.get('tokenAmount', 0):.2f} {"SOL" if token_a.get('mint') == "So11111111111111111111111111111111111111112" else token_a.get('mint')}\n"
+                        f"Swapped {token_a.get('tokenAmount', 0):.2f} {'SOL' if token_a.get('mint') == 'So11111111111111111111111111111111111111112' else token_a.get('mint')}\n"
+                        f"for {token_b.get('tokenAmount', 0):.2f} {'SOL' if token_b.get('mint') == 'So11111111111111111111111111111111111111112' else token_b.get('mint')}\n"
                         # f"Signature: {txn.get('signature', '')[:10]}..."
                     )
                 await client.send_message(
