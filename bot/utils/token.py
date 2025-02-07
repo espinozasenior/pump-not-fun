@@ -265,7 +265,8 @@ async def get_token_info(token: str) -> Optional[Dict]:
     
 async def save_token_info(token_info: Dict[str, Any]) -> bool:
     try:
-        async with AsyncSession() as session:
+        from database.database import AsyncSessionFactory
+        async with AsyncSessionFactory() as session:
             # Add helper function to safely convert values
             def get_native_int(val):
                 return int(val.item()) if hasattr(val, 'item') else int(val)
@@ -314,6 +315,7 @@ async def save_token_info(token_info: Dict[str, Any]) -> bool:
             
     except (IntegrityError, SQLAlchemyError) as e:
         logger.error(f"DB error saving token: {e}")
+        await session.rollback()
         return False
     except KeyError as e:
         logger.error(f"Missing field in token info: {e}")
