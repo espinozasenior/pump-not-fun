@@ -18,9 +18,9 @@ GMGN_BASE_URL="https://gmgn.ai/defi/quotation/v1"
 
 quote_params = {
     "device_id": "dd94f200-d3fc-46fb-8ccb-194706af0789",
-    "client_id": "gmgn_web_2025.0128.214338",
+    "client_id": "gmgn_web_2025.0206.195500",
     "from_app": "gmgn",
-    "app_ver": "2025.0128.214338",
+    "app_ver": "2025.0206.195500",
     "tz_name": "America/Chicago",
     "tz_offset": "-21600",
     "app_lang": "en",
