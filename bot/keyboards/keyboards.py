@@ -27,7 +27,7 @@ def get_buy_button(token_address: str):
         [
             InlineKeyboardButton(
                 "📈 Chart", 
-                url=f"https://dexscreener.com/solana/{token_address}"
+                url=f"https://gmgn.ai/sol/token/{token_address}"
             )
         ]
     ])
