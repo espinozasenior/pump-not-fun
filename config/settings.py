@@ -41,4 +41,4 @@ HELIUS_API_KEY = os.getenv("HELIUS_API_KEY")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 WEBHOOK_ID = os.getenv("WEBHOOK_ID")
-WALLETS = []
+WALLETS = os.getenv("WALLETS")

@@ -71,7 +71,8 @@ async def get_webhooks() -> list[dict]:
      except Exception as e:                                                             
          logger.error(f"Webhook retrieval failed: {str(e)}")                            
          return []                                                                      
-                                                                                        
+
+# TODO: GET wallets from database instead of config                                                                                        
 async def edit_webhook(webhook_id: str, new_addresses: list[str] = None, new_url: str = None) -> bool:
     """Update existing webhook with new addresses or URL"""                            
     api_url = f"https://api.helius.xyz/v0/webhooks/{webhook_id}?api-key={HELIUS_API_KEY}"
