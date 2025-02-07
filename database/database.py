@@ -68,7 +68,11 @@ class Token(Base):
     created_date = Column(DateTime(timezone=False), default=datetime.utcnow)  # Change to naive datetime
     is_active = Column(Boolean, default=True)
     # Update relationships
-    holdings = relationship("SmartWalletHolding", back_populates="token")
+    holdings = relationship(
+        "SmartWalletHolding", 
+        back_populates="token",
+        cascade="all, delete-orphan"
+    )
     wallets = relationship(
         "SmartWallet", 
         secondary="smart_wallet_holding", 
