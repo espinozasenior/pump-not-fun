@@ -8,30 +8,30 @@ from bot.utils.jupiter_swap import swap
 from bot.utils.token import get_token_info, save_token_info
 from bot.keyboards.keyboards import get_buy_button
 
-async def forward_message(client: Client, message: Message, token_info: dict, chat_id: int):
+async def forward_message(client: Client, message: Message, token_info: dict, chat_id: int, wallet_info: dict = None):
         try:
             msg = await client.send_message(
                 chat_id=chat_id,
-                entities=message.entities,
-                text=format_forward_message(message, token_info),
+                text=format_forward_message(token_info, wallet_info),
                 reply_markup=get_buy_button(token_info.get('profile').get('ca', 'N/A')),
-                disable_web_page_preview=True
+                disable_web_page_preview=False
             )
             logger.debug(f"Forwarded message: {msg.id} / link {msg.link}")
         except Exception as e:
             logger.error(f"Forward error: {e}")
 
 
-def format_forward_message(message: Message, token_info: dict) -> str:
-    return f"""🚨 **New Pump Detected** 🚨
+def format_forward_message(token_info: dict, wallet: dict = None) -> str:
+    return f"""**{wallet['name'] if wallet['name'] else "N/A"}** { wallet['description'] if wallet['description'] else "" }
+
 📌**CA:** `{token_info.get('profile').get('ca', 'N/A')}`
-Name: {token_info.get('profile').get('name', 'N/A')}
-Symbol: {token_info.get('profile').get('symbol', 'N/A')}
+Name: **{token_info.get('profile').get('name', 'N/A')}**
+Symbol: **{token_info.get('profile').get('symbol', 'N/A')}**
 🏷️ Price: {token_info.get('profile').get('price', 0)}
 💸 MC: 
 💰 LP: ${token_info.get('profile').get('liquidity', 0)}
 👥 **Holders:** {token_info.get('stats').get('holders', 0)}
-📊 **Metrics:**
+📊 **TOP 100 Metrics:**
     - 📈 Profit Avg: {token_info.get('holders').get('avg_profit_percent', 0):.2f}%
     - 🔝 Top 10 holders: {token_info.get('profile').get('top_10_holder_rate', 0):.2f}%
     - 📉 BC Owners: {token_info.get('stats').get('bc_owners_percent', 0):.2f}%
@@ -44,10 +44,10 @@ Symbol: {token_info.get('profile').get('symbol', 'N/A')}
     - 🎅🏾 With common source: {token_info.get('holders').get('same_address_funded', 0)}        
 
 🔗 **Socials:**
-    - Twitter: https://x.com/{token_info.get('profile').get('twitter', 'N/A')}
-    - Telegram: {token_info.get('profile').get('telegram', 'N/A')}
-    - Github: {token_info.get('profile').get('github', 'N/A')}
-    - Website: {token_info.get('profile').get('website', 'N/A')}
+    - Twitter: https://x.com/{token_info.get('links').get('twitter', 'N/A')}
+    - Telegram: {token_info.get('links').get('telegram', 'N/A')}
+    - Github: {token_info.get('links').get('github', 'N/A')}
+    - Website: {token_info.get('links').get('website', 'N/A')}
     """
 
 async def user_in_chat_message_handler(_:Client, message:Message):

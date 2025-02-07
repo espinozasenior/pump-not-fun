@@ -1,11 +1,13 @@
 from logger.logger import logger
-from config.settings import HELIUS_API_KEY, HOMIES_CHAT_ID, WEBHOOK_SECRET, WALLETS
+from config.settings import HELIUS_API_KEY, HOMIES_CHAT_ID, WEBHOOK_SECRET, WALLETS, SOL_MINT
 from database.database import SmartWallet, Token, WalletHoldingHistory, AsyncSessionFactory
 from sqlalchemy import select, delete
 from datetime import datetime, timedelta, UTC
 from pyrogram import Client
 import aiohttp
 from bot.utils.wallet import check_multiple_wallets
+from bot.utils.token import get_token_info
+from bot.messages.messages import forward_message
 
 async def create_swap_webhook(webhook_url: str, addresses: list[str], auth_header: str = None) -> bool:
     """
@@ -114,7 +116,7 @@ async def process_webhook(request_data: dict, client: Client):
         txn = request_data[0]
         text = ""
         # FIX: Use the AsyncSessionFactory directly
-        async with AsyncSessionFactory() as session:  # Changed from get_session()
+        async with AsyncSessionFactory() as session:
             try:
                 # Unnecessary check if swap is successful because webhook is filtered for success
                 # if txn.get("type") == "SWAP" and txn.get("transactionError") == None:
@@ -131,17 +133,19 @@ async def process_webhook(request_data: dict, client: Client):
                     result = await session.execute(query)
                     
                     # Fetch the first result (if any)
-                    wallet = result.scalar_one_or_none()
+                    wallet = result.scalars().first()
                     if not wallet:                                         
                         logger.warning(f"Unknown wallet performed swap: {owner}")                                                                  
                         return 
                     # Format message details
                     token = txn.get("tokenTransfers", {})[0]
-                    text=(
-                        f"🔄 Swap detected from: {wallet.name}\n"
-                        f"Bought {token.get('tokenAmount', 0):.2f} of {token.get('mint', 'Unknown')}\n"
-                        f"in PUMP FUN\n"
-                    )
+                    token_info = await get_token_info(token.get("mint", None))
+                    wallet_info = {
+                        "name": wallet.name,
+                        "address": wallet.address,
+                        "description": f"""🟢 Bought {token.get('tokenAmount', 0):.2f} of {token_info.get('profile').get('name')} in PUMPFUN💊"""
+                    }
+                    await forward_message(client, None, token_info, HOMIES_CHAT_ID, wallet_info)
                 else:
                     owner = txn.get("feePayer", None)
                     if not owner:                                          
@@ -150,22 +154,36 @@ async def process_webhook(request_data: dict, client: Client):
                     # Query to find a wallet by address
                     query = select(SmartWallet).where(SmartWallet.address == owner)
                     result = await session.execute(query)
-                    wallet = result.scalar_one_or_none()
+                    wallet = result.scalars().first()
                     if not wallet:                                         
                         logger.warning(f"Unknown wallet performed swap: {owner}")                                                                  
-                        return 
+                        return
+                    length = len(txn.get("tokenTransfers", {})) 
                     token_a = txn.get("tokenTransfers", {})[0]
-                    token_b = txn.get("tokenTransfers", {})[1]
-                    text=(
-                        f"🔄 Swap detected from: {wallet.name}\n"
-                        f"Swapped {token_a.get('tokenAmount', 0):.2f} {'SOL' if token_a.get('mint') == 'So11111111111111111111111111111111111111112' else token_a.get('mint')}\n"
-                        f"for {token_b.get('tokenAmount', 0):.2f} {'SOL' if token_b.get('mint') == 'So11111111111111111111111111111111111111112' else token_b.get('mint')}\n"
-                        # f"Signature: {txn.get('signature', '')[:10]}..."
-                    )
-                await client.send_message(
-                    chat_id=HOMIES_CHAT_ID,
-                    text=text
-                )
+                    token_b = txn.get("tokenTransfers", {})[length - 1]
+
+                    token_info = await get_token_info(token_a.get("mint") if token_a.get("mint") != SOL_MINT else token_b.get("mint"))
+                    # Determine if buying or selling based on token types
+                    is_buying = token_a.get("mint") == SOL_MINT
+                    amount_a = token_a.get("tokenAmount", 0)
+                    amount_b = token_b.get("tokenAmount", 0)
+                    token_name = token_info.get('profile', {}).get('name', 'Unknown')
+
+                    if is_buying:
+                        description = f"🟢 Bought {amount_a:.2f} SOL"
+                    else:
+                        description = f"🔴 Sold {amount_a:.2f} **{token_name}**"
+
+                    description += f" for {amount_b:.2f} "
+                    description += "SOL" if token_b.get("mint") == SOL_MINT else f"**{token_name}**"
+                    description += "\n"
+
+                    wallet_info = {
+                        "name": wallet.name,
+                        "address": wallet.address,
+                        "description": description
+                    }
+                    await forward_message(client, None, token_info, HOMIES_CHAT_ID, wallet_info)
             except Exception as e:
                 logger.error(f"Error getting token info: {str(e)}")
                 return None
