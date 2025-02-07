@@ -14,7 +14,6 @@ setup.cfg
 ./bot/utils/decorators.py
 ./bot/utils/jupiter_swap.py
 ./bot/utils/monitor.py
-./bot/utils/playsound.py
 ./bot/utils/token.py
 ./bot/utils/wallet.py
 ./config/settings.py
@@ -33,7 +32,6 @@ bot/messages/messages.py
 bot/utils/decorators.py
 bot/utils/jupiter_swap.py
 bot/utils/monitor.py
-bot/utils/playsound.py
 bot/utils/token.py
 bot/utils/wallet.py
 config/settings.py
