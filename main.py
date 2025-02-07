@@ -1,4 +1,4 @@
-from config.settings import API_ID, API_HASH, WEBHOOK_SECRET, SESSION_STRING, WEBHOOK_ID
+from config.settings import API_ID, API_HASH, WEBHOOK_SECRET, SESSION_STRING, WEBHOOK_ID, BOT_TOKEN
 from bot.handlers import register_handlers
 from bot.tasks import register_tasks
 from logger.logger import logger
@@ -54,9 +54,8 @@ async def main():
         "pump-not-fun",
         api_id=API_ID,
         api_hash=API_HASH,
-        session_string=SESSION_STRING
+        bot_token=BOT_TOKEN,
     )
-    
     async with app:
         # Add web server startup
         config = uvicorn.Config(
@@ -74,7 +73,7 @@ async def main():
         scheduler.start()
         
         # Register handlers after initialization
-        register_handlers(app)
+        # register_handlers(app)
         
         # Keep running
         while True:
