@@ -18,16 +18,17 @@ GMGN_BASE_URL="https://gmgn.ai/defi/quotation/v1"
 
 quote_params = {
     "device_id": "dd94f200-d3fc-46fb-8ccb-194706af0789",
-    "client_id": "gmgn_web_2025.0206.195500",
+    "client_id": "gmgn_web_2025.0207.224528",
     "from_app": "gmgn",
-    "app_ver": "2025.0206.195500",
+    "app_ver": "2025.0207.224528",
     "tz_name": "America/Chicago",
     "tz_offset": "-21600",
     "app_lang": "en",
     "limit": "20",
     "cost": "20",
     "order_by": "amount_percentage",
-    "direction": "desc"
+    "direction": "desc",
+    "size": "300",
 }
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
