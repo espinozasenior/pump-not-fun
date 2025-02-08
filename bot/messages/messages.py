@@ -22,7 +22,7 @@ async def forward_message(client: Client, message: Message, token_info: dict, ch
 
 
 def format_forward_message(token_info: dict, wallet: dict = None) -> str:
-    return f"""**{wallet['name'] if wallet['name'] else "N/A"}** { wallet['description'] if wallet['description'] else "" }
+    return f"""**#{wallet['name'] if wallet['name'] else "N/A"}** { wallet['description'] if wallet['description'] else "" }
 
 📌**CA:** `{token_info.get('profile').get('ca', 'N/A')}`
 Name: **{token_info.get('profile').get('name', 'N/A')}**
