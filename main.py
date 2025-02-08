@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     # Update Helius webhook
     await edit_webhook(
         webhook_id=WEBHOOK_ID,
-        new_url=webhook_url
+        url=webhook_url
     )
 
     # Initialize and START client first

@@ -73,24 +73,33 @@ async def get_webhooks() -> list[dict]:
          return []                                                                      
 
 # TODO: GET wallets from database instead of config                                                                                        
-async def edit_webhook(webhook_id: str, new_addresses: list[str] = None, new_url: str = None) -> bool:
+async def edit_webhook(webhook_id: str, new_addresses: list[str] = None, url: str = None) -> bool:
     """Update existing webhook with new addresses or URL"""                            
     api_url = f"https://api.helius.xyz/v0/webhooks/{webhook_id}?api-key={HELIUS_API_KEY}"
-    wallets = list(map(lambda item: item["address"], WALLETS))
+    all_addresses = []
+    try:
+        async with AsyncSessionFactory() as session:
+            query = select(SmartWallet.address)
+            result = await session.execute(query)
+            db_addresses = list(result.scalars().all())
+
+            all_addresses = list(set(
+                db_addresses +
+                (new_addresses or [])
+            ))
+    except Exception as e:
+        logger.error(f"Error getting wallet addresses: {str(e)}")
+        return False
                                                                                         
     update_data = {
+        "webhookURL": url,
         "webhookType": "enhanced",
-        "accountAddresses": wallets,
+        "accountAddresses": all_addresses,
         "transactionTypes": ["SWAP"],
         "txnStatus": "success",
         "authHeader": WEBHOOK_SECRET
     }
-
-    if new_addresses:                                                                  
-        update_data["accountAddresses"] = new_addresses                                
-    if new_url:                                                                        
-        update_data["webhookURL"] = new_url                                            
-                                                                                    
+                                                                           
     try:                                                                               
         async with aiohttp.ClientSession() as session:
             async with session.put(
