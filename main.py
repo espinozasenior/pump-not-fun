@@ -11,7 +11,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 import os
 
-PORT = 8000 if not os.getenv('RENDER') else os.getenv('PORT')
+PORT = 8000 if not os.getenv('RENDER') else int(os.getenv('PORT', '10000'))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
