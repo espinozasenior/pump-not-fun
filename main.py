@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     
     if is_production:
         domain = os.getenv('RENDER_EXTERNAL_URL')
-        webhook_url = f"https://{domain}/webhooks"
+        webhook_url = f"{domain}/webhooks"
     else:
         # Local development with ngrok
         from pyngrok import ngrok
