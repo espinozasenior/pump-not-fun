@@ -16,7 +16,7 @@ PORT = 8000 if not os.getenv('RENDER') else int(os.getenv('PORT', '10000'))
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Environment detection
-    is_production = os.getenv('RENDER')
+    is_production = os.getenv('environment') == 'production'
     
     if is_production:
         domain = os.getenv('RENDER_EXTERNAL_URL')
