@@ -8,26 +8,56 @@ from pyrogram import Client
 import asyncio
 from fastapi import FastAPI, Request, HTTPException
 import uvicorn
-from pyngrok import ngrok
 from contextlib import asynccontextmanager
+import os
+
+PORT = 8000 if not os.getenv('RENDER') else os.getenv('PORT')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start ngrok tunnel
-    public_url = ngrok.connect(8000, bind_tls=True).public_url
-    logger.info(f"Webhook URL: {public_url}/webhooks")
+    # Environment detection
+    is_production = os.getenv('RENDER')
     
-    # Initialize webhook
+    if is_production:
+        domain = os.getenv('RENDER_EXTERNAL_URL')
+        webhook_url = f"https://{domain}/webhooks"
+    else:
+        # Local development with ngrok
+        from pyngrok import ngrok
+        tunnel = ngrok.connect(PORT, bind_tls=True)
+        domain = tunnel.public_url
+        webhook_url = f"{domain}/webhooks"
     
+    logger.info(f"Webhook endpoint: {webhook_url}")
+    
+    # Update Helius webhook
     await edit_webhook(
         webhook_id=WEBHOOK_ID,
-        new_url=f"{public_url}/webhooks"
+        new_url=webhook_url
     )
+
+    # Initialize and START client first
+    global client
+    client = Client(
+        "pump-not-fun",
+        api_id=API_ID,
+        api_hash=API_HASH,
+        bot_token=BOT_TOKEN,
+    )
+    await client.start()  # <-- ADD THIS LINE
     
-    yield  # App runs here
+    # Start scheduler AFTER client is ready
+    scheduler = AsyncIOScheduler()
+    register_tasks(client, scheduler)
+    scheduler.start()
+    
+    yield
     
     # Cleanup
-    ngrok.kill()
+    await client.stop()
+    scheduler.shutdown()
+    if not is_production:
+        ngrok.kill()
 
 # Create FastAPI app instance
 web_app = FastAPI(lifespan=lifespan)
@@ -38,46 +68,23 @@ async def handle_webhook(request: Request):
     if request.headers.get("Authorization") != WEBHOOK_SECRET:
         raise HTTPException(status_code=403, detail="Invalid auth header")
     
-    await process_webhook(await request.json(), app)
+    await process_webhook(await request.json(), client)
     
     return {"status": "ok"}
 
 async def main():
-    # Initialize database PROPERLY
-    from database.database import init_db, engine
-    # await init_db()
+    from database.database import engine
     await engine.dispose()  # Clean initial connection
-    
-    # Create Pyrogram client
-    global app 
-    app = Client(
-        "pump-not-fun",
-        api_id=API_ID,
-        api_hash=API_HASH,
-        bot_token=BOT_TOKEN,
-    )
-    async with app:
-        # Add web server startup
-        config = uvicorn.Config(
-            web_app,
-            port=8000,
-            log_level="info",
-            loop="asyncio"
-        )
-        server = uvicorn.Server(config)
-        asyncio.create_task(server.serve())
 
-        # Initialize and start scheduler
-        scheduler = AsyncIOScheduler()
-        register_tasks(app, scheduler)
-        scheduler.start()
-        
-        # Register handlers after initialization
-        # register_handlers(app)
-        
-        # Keep running
-        while True:
-            await asyncio.sleep(3600)
+    config = uvicorn.Config(
+        web_app,
+        host="0.0.0.0",
+        port=PORT,
+        log_level="info",
+        loop="asyncio"
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
 
 if __name__ == "__main__":
     asyncio.run(main())
