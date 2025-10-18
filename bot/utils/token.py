@@ -1,3 +1,11 @@
+"""
+Token information utilities using gmgnai-wrapper library.
+
+This module uses the gmgnai-wrapper to bypass Cloudflare protection
+when fetching token data from GMGN.ai.
+
+Refactored: 2025-10-18
+"""
 from logger.logger import logger
 from database.database import AsyncSession, Token
 from typing import Any, Dict, Optional, TypedDict
@@ -8,11 +16,40 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert
 from datetime import datetime
 
+# GMGN Wrapper imports
+from gmgn.client import gmgn
+from functools import wraps
+
 class TokenInfo(TypedDict):
     holders: dict
     links: dict 
     stats: dict
     profile:dict
+
+# ============================================================================
+# GMGN Wrapper - Async Adapter Layer
+# ============================================================================
+
+def async_wrap(func):
+    """Wrap synchronous gmgn calls to work with async/await"""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        return await asyncio.to_thread(func, *args, **kwargs)
+    return wrapper
+
+# Global client instance (reused across calls)
+_gmgn_client = None
+
+def get_gmgn_client():
+    """Get or create global gmgn client instance"""
+    global _gmgn_client
+    if _gmgn_client is None:
+        _gmgn_client = gmgn()
+    return _gmgn_client
+
+# ============================================================================
+# Legacy Code - Will be removed after migration
+# ============================================================================
 
 GMGN_BASE_URL="https://gmgn.ai/defi/quotation/v1"
 
@@ -74,275 +111,192 @@ async def close_session():
         _session = None
 
 async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
-    quote_url = f"{GMGN_BASE_URL}/tokens/top_holders/sol/{token}"
-    max_retries = 2
-    retry_delay = 1
-    
-    for attempt in range(max_retries):
-        try:
-            session = await get_session()
-            async with session.get(
-                quote_url,
-                params=quote_params,
-                ssl=False  # May help with some Cloudflare issues
-            ) as response:
-                if response.status == 403:
-                    logger.warning(f"Access forbidden (403) for top_holders. Attempt {attempt + 1}/{max_retries}")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return None
-                    
-                if response.status == 422:
-                    error_data = await response.json()
-                    logger.error(f"API validation error: {error_data}")
-                    return None
-                    
-                response.raise_for_status()
-                json_data = await response.json()
-                # Assuming the JSON data is stored in a variable called 'data'
-                df = pd.DataFrame(json_data['data'])
-
-                # Define wallets to exclude
-                EXCLUDED_ADDRESSES = {
-                    "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9", #Binance
-                    "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg", #Pumpfun
-                    "AeBwztwXScyNNuQCEdhS54wttRQrw3Nj1UtqddzB4C7b", #RobinHood
-                }
-
-                # 1. Fresh wallets (is_new = True)
-                fresh_wallets = df['is_new'].sum()
-
-                # 2. Wallets that did sells (sell_tx_count_cur > 0)
-                sold_wallets = (df['sell_tx_count_cur'] > 0).sum()
-
-                # 3. Suspicious wallets (is_suspicious = True)
-                suspicious_wallets = df['is_suspicious'].sum()
-
-                # Count Insiders (wallets with "rat_trader" in maker_token_tags)
-                insiders_count = df['maker_token_tags'].apply(lambda tags: 'rat_trader' in tags if isinstance(tags, list) else False).sum()
-
-                # Count Phishing (wallets with "transfer_in" in maker_token_tags)
-                phishing_count = df['maker_token_tags'].apply(lambda tags: 'transfer_in' in tags if isinstance(tags, list) else False).sum()
-
-                # 4. Wallets in profit (profit > 0)
-                profitable_wallets = (df['profit'] > 0).sum()
-
-                # 5. Average profit percentage (for wallets with cost_cur > 0)
-                mask = df['cost_cur'] > 0
-                profit_percent = (df[mask]['profit'] / df[mask]['cost_cur']).mean() * 100
-
-                # 6. Funded from same wallet address (excluding specific wallets)
-                from_address_counts = (
-                    df['native_transfer']
-                    .apply(lambda x: x['from_address'] 
-                           if x['from_address'] not in EXCLUDED_ADDRESSES
-                           else None)
-                    .value_counts(dropna=True)
-                )
-                same_address_funded = from_address_counts[from_address_counts > 1].sum()
-
-                # Filter addresses that appear more than once
-                common_addresses = from_address_counts[from_address_counts > 1]
-
-                # Print results
-                print(f"1. Fresh wallets: {int(fresh_wallets)}")
-                print(f"2. Wallets that did sells: {sold_wallets}")
-                print(f"3. Suspicious wallets: {suspicious_wallets}")
-                print(f"4. Number of Insiders (rat_trader): {insiders_count}")
-                print(f"5. Number of Phishing (transfer_in): {phishing_count}")
-                print(f"6. Wallets in profit: {profitable_wallets}")
-                print(f"7. Average profit percent: {profit_percent:.2f}%")
-                print(f"8. Funded from same address: {same_address_funded}")
-                print(f"9. Wallet addresses that funded multiple wallets: {common_addresses}")
-
-                return {
-                    'fresh_wallets': int(fresh_wallets),
-                    'sold_wallets': sold_wallets,
-                    'suspicious_wallets': suspicious_wallets,
-                    'insiders_wallets': insiders_count,
-                    'phishing_wallets': phishing_count,
-                    'profitable_wallets': profitable_wallets,
-                    'avg_profit_percent': profit_percent,
-                    'same_address_funded': same_address_funded,
-                    'common_addresses': common_addresses.to_dict()
-                }
-        except aiohttp.ClientError as e:
-            logger.warning(f"Attempt {attempt + 1} failed for top_holders: {e}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            logger.error(f"All retries failed for top_holders: {e}")
+    """Get top holders analysis using gmgnai-wrapper"""
+    try:
+        client = get_gmgn_client()
+        
+        @async_wrap
+        def fetch():
+            return client.getTopBuyers(contractAddress=token)
+        
+        data = await fetch()
+        
+        if not data or 'holders' not in data or 'holderInfo' not in data['holders']:
+            logger.warning(f"No top buyers data for token: {token}")
             return None
-        except Exception as e:
-            logger.error(f"Unexpected error in get_top_holders: {e}")
+        
+        # Get holderInfo list
+        holder_list = data['holders']['holderInfo']
+        
+        if not holder_list:
             return None
-    
-    return None
+        
+        df = pd.DataFrame(holder_list)
+        
+        if df.empty:
+            return None
+        
+        # Excluded addresses
+        EXCLUDED_ADDRESSES = {
+            "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+            "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg",
+            "AeBwztwXScyNNuQCEdhS54wttRQrw3Nj1UtqddzB4C7b",
+        }
+        
+        # Analysis - note: field names may differ from old API
+        fresh_wallets = df['is_new'].sum() if 'is_new' in df else 0
+        sold_wallets = len(df[df['status'] == 'sold']) if 'status' in df else 0
+        suspicious_wallets = df['is_suspicious'].sum() if 'is_suspicious' in df else 0
+        
+        insiders_count = df['maker_token_tags'].apply(
+            lambda tags: 'rat_trader' in tags if isinstance(tags, list) else False
+        ).sum() if 'maker_token_tags' in df else 0
+        
+        phishing_count = df['maker_token_tags'].apply(
+            lambda tags: 'transfer_in' in tags if isinstance(tags, list) else False
+        ).sum() if 'maker_token_tags' in df else 0
+        
+        profitable_wallets = (df['profit'] > 0).sum() if 'profit' in df else 0
+        
+        mask = df['cost_cur'] > 0 if 'cost_cur' in df else pd.Series([False] * len(df))
+        profit_percent = (df[mask]['profit'] / df[mask]['cost_cur']).mean() * 100 if mask.any() else 0.0
+        
+        # Same address funding
+        same_address_funded = 0
+        common_addresses = {}
+        
+        if 'native_transfer' in df:
+            from_address_counts = (
+                df['native_transfer']
+                .apply(lambda x: x.get('from_address') if isinstance(x, dict) and x.get('from_address') not in EXCLUDED_ADDRESSES else None)
+                .value_counts(dropna=True)
+            )
+            same_address_funded = from_address_counts[from_address_counts > 1].sum()
+            common_addresses = from_address_counts[from_address_counts > 1].to_dict()
+        
+        result = {
+            'fresh_wallets': int(fresh_wallets),
+            'sold_wallets': int(sold_wallets),
+            'suspicious_wallets': int(suspicious_wallets),
+            'insiders_wallets': int(insiders_count),
+            'phishing_wallets': int(phishing_count),
+            'profitable_wallets': int(profitable_wallets),
+            'avg_profit_percent': float(profit_percent),
+            'same_address_funded': int(same_address_funded),
+            'common_addresses': common_addresses
+        }
+        
+        logger.info(f"✅ Top holders analyzed for {token[:8]}...")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting top holders via wrapper: {e}")
+        return None
 
 
 async def get_token_profile(token: str) -> Optional[Dict[str, Any]]:
-    quote_url = f"https://gmgn.ai/api/v1/mutil_window_token_info"
-    max_retries = 2
-    retry_delay = 1
-    
-    for attempt in range(max_retries):
-        try:
-            session = await get_session()
-            async with session.post(
-                quote_url,
-                params=quote_params,
-                json={"chain":"sol","addresses":[token]},
-                ssl=False
-            ) as response:
-                if response.status == 403:
-                    logger.warning(f"Access forbidden (403) for token_profile. Attempt {attempt + 1}/{max_retries}")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return None
-                    
-                if response.status == 422:
-                    error_data = await response.json()
-                    logger.error(f"API validation error: {error_data}")
-                    return None
-                    
-                response.raise_for_status()
-                json_data = await response.json()
-                # Assuming the JSON data is stored in a variable called 'data'
-                profile = json_data['data'][0]
-                print(f"Holders: {int(profile.get('holder_count', 0))}")
-                result = {
-                    'ca': token,
-                    'holders': int(profile.get('holder_count', 0)),
-                    'symbol': profile.get('symbol', ''),
-                    'logo': profile.get('logo', ''),
-                    'name': profile.get('name', ''),
-                    'price': float(profile.get('price').get('price', 0.0)),
-                    'top_10_holder_rate': float(profile.get('dev').get('top_10_holder_rate', 0.00)) * 100,
-                    'volume_1h': float(profile.get('price').get('volume_1h', 0.0)),
-                    'volume_5m': float(profile.get('price').get('volume_5m', 0.0)),
-                    'liquidity': float(profile.get('liquidity', 0.0)),
-                }
-                return result
-        except aiohttp.ClientError as e:
-            logger.warning(f"Attempt {attempt + 1} failed for token_profile: {e}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            logger.error(f"All retries failed for token_profile: {e}")
+    """Get token profile using gmgnai-wrapper - combines multiple endpoints"""
+    try:
+        client = get_gmgn_client()
+        
+        # Fetch data from multiple endpoints concurrently
+        @async_wrap
+        def fetch_price():
+            return client.getTokenUsdPrice(contractAddress=token)
+        
+        @async_wrap
+        def fetch_holders():
+            return client.getTopBuyers(contractAddress=token)
+        
+        # Get data concurrently
+        price_data, holders_data = await asyncio.gather(
+            fetch_price(),
+            fetch_holders(),
+            return_exceptions=True
+        )
+        
+        if isinstance(price_data, Exception) or isinstance(holders_data, Exception):
+            logger.error(f"Failed to fetch token data: price={price_data}, holders={holders_data}")
             return None
-        except Exception as e:
-            logger.error(f"Unexpected error in get_token_profile: {e}")
+        
+        if not price_data or not holders_data:
+            logger.warning(f"No data returned from gmgn wrapper for token: {token}")
             return None
-    
-    return None
+        
+        # Extract holder info from holders response
+        holder_info = holders_data.get('holders', {})
+        status_now = holder_info.get('statusNow', {})
+        
+        # Map to expected format (combine available data)
+        result = {
+            'ca': token,
+            'holders': int(holder_info.get('holder_count', 0)),
+            'symbol': '',  # Not available from these endpoints
+            'logo': '',    # Not available
+            'name': '',    # Not available
+            'price': float(price_data.get('usd_price', 0.0)),
+            'top_10_holder_rate': float(status_now.get('top_10_holder_rate', 0.0)) * 100,
+            'volume_1h': 0.0,   # Not available from these endpoints
+            'volume_5m': 0.0,   # Not available
+            'liquidity': 0.0,   # Not available
+        }
+        
+        logger.info(f"✅ Token profile fetched for {token[:8]}...")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting token profile via wrapper: {e}")
+        return None
 
 async def get_token_links(token: str) -> Optional[Dict[str, Any]]:
-    quote_url = f"https://gmgn.ai/api/v1/mutil_window_token_link_rug_vote/sol/{token}"
-    max_retries = 2
-    retry_delay = 1
-    
-    for attempt in range(max_retries):
-        try:
-            session = await get_session()
-            async with session.get(
-                quote_url,
-                params=quote_params,
-                ssl=False
-            ) as response:
-                if response.status == 403:
-                    logger.warning(f"Access forbidden (403) for token_links. Attempt {attempt + 1}/{max_retries}")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return None
-                    
-                if response.status == 422:
-                    error_data = await response.json()
-                    logger.error(f"API validation error: {error_data}")
-                    return None
-                    
-                response.raise_for_status()
-                json_data = await response.json()
-                # Assuming the JSON data is stored in a variable called 'data'
-                # Extract the 'link' object
-                link_data = json_data['data']['link']
-
-                # # Validate if fields exist and are non-empty
-                # has_twitter = bool(link_data.get('twitter_username', '').strip())
-                # has_website = bool(link_data.get('website', '').strip())
-                # has_telegram = bool(link_data.get('telegram', '').strip())
-                # has_github = bool(link_data.get('github', '').strip())
-
-                return {
-                    'twitter': link_data.get('twitter_username', '').strip(),
-                    'website': link_data.get('website', '').strip(),
-                    'telegram': link_data.get('telegram', '').strip(),
-                    'github': link_data.get('github', '').strip()
-                }
-        except aiohttp.ClientError as e:
-            logger.warning(f"Attempt {attempt + 1} failed for token_links: {e}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            logger.error(f"All retries failed for token_links: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected error in get_token_links: {e}")
-            return None
-    
-    return None
+    """Get token social links using gmgnai-wrapper"""
+    try:
+        # The gmgn wrapper doesn't provide social links endpoint
+        # Return empty structure for now (maintains compatibility)
+        result = {
+            'twitter': '',
+            'website': '',
+            'telegram': '',
+            'github': ''
+        }
+        
+        logger.info(f"⚠️  Token links not available from gmgn wrapper (returning empty)")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting token links via wrapper: {e}")
+        return None
     
 async def get_token_stats(token: str) -> Optional[Dict[str, Any]]:
-    quote_url = f"https://gmgn.ai/api/v1/token_stat/sol/{token}"
-    max_retries = 2
-    retry_delay = 1
-    
-    for attempt in range(max_retries):
-        try:
-            session = await get_session()
-            async with session.get(
-                quote_url,
-                params=quote_params,
-                ssl=False
-            ) as response:
-                if response.status == 403:
-                    logger.warning(f"Access forbidden (403) for token_stats. Attempt {attempt + 1}/{max_retries}")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return None
-                    
-                if response.status == 422:
-                    error_data = await response.json()
-                    logger.error(f"API validation error: {error_data}")
-                    return None
-                    
-                response.raise_for_status()
-                json_data = await response.json()
-                # Assuming the JSON data is stored in a variable called 'data'
-                stats = json_data['data']
-                print(f"Holders: {int(stats.get('holder_count', ''))}")
-                print(f"Bluechip Owner %: {float(stats.get('bluechip_owner_percentage', '').strip()) * 100}")
-                print(f"Insiders %: {float(stats.get('top_rat_trader_percentage', '').strip()) * 100}")
-                return {
-                    'holders': int(stats.get('holder_count', '')),
-                    'bc_owners_percent': float(stats.get('bluechip_owner_percentage', '').strip()) * 100,
-                    'insiders_percent': float(stats.get('top_rat_trader_percentage', '').strip()) * 100
-                }
-        except aiohttp.ClientError as e:
-            logger.warning(f"Attempt {attempt + 1} failed for token_stats: {e}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            logger.error(f"All retries failed for token_stats: {e}")
+    """Get token statistics using gmgnai-wrapper"""
+    try:
+        client = get_gmgn_client()
+        
+        @async_wrap
+        def fetch_holders():
+            return client.getTopBuyers(contractAddress=token)
+        
+        data = await fetch_holders()
+        
+        if not data or 'holders' not in data:
+            logger.warning(f"No data returned from gmgn wrapper for token: {token}")
             return None
-        except Exception as e:
-            logger.error(f"Unexpected error in get_token_stats: {e}")
-            return None
-    
-    return None
+        
+        holder_info = data.get('holders', {})
+        
+        # Extract statistics
+        stats = {
+            'holders': int(holder_info.get('holder_count', 0)),
+            'bc_owners_percent': 0.0,  # Not available from this endpoint
+            'insiders_percent': 0.0     # Not available from this endpoint
+        }
+        
+        logger.info(f"✅ Token stats fetched for {token[:8]}...")
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error getting token stats via wrapper: {e}")
+        return None
 
 async def get_token_info(token: str) -> Optional[Dict]:
     try:
@@ -394,88 +348,41 @@ async def get_token_info(token: str) -> Optional[Dict]:
         logger.error(f"Error getting token info: {e}")
         return None
     
-async def get_wallet_token_stats(wallet_address: str, token_address: str, period: str = '1d') -> Optional[Dict[str, Any]]:
-    quote_url = f"{GMGN_BASE_URL}/smartmoney/sol/walletstat/{wallet_address}"
-    
-    # Update params with token address and period
-    params = quote_params.copy()
-    params.update({
-        "token_address": token_address,
-        "period": period
-    })
-    
+async def get_wallet_token_stats(wallet_address: str, token_address: str, period: str = '7d') -> Optional[Dict[str, Any]]:
+    """Get wallet stats using gmgnai-wrapper"""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                quote_url,
-                headers=headers,
-                params=params,
-                timeout=10
-            ) as response:
-                if response.status == 422:
-                    error_data = await response.json()
-                    logger.error(f"GMGN API validation error: {error_data}")
-                    return None
-                response.raise_for_status()
-                json_data = await response.json()
-                
-                # Return the complete response structure with code, message, and data
-                if json_data.get('code') == 0 and json_data.get('msg') == 'success':
-                    return {
-                        "code": json_data.get('code'),
-                        "msg": json_data.get('msg'),
-                        "data": {
-                            "token_address": json_data['data'].get('token_address'),
-                            "name": json_data['data'].get('name'),
-                            "symbol": json_data['data'].get('symbol'),
-                            "decimals": json_data['data'].get('decimals'),
-                            "logo": json_data['data'].get('logo'),
-                            "launchpad": json_data['data'].get('launchpad'),
-                            "total_supply": json_data['data'].get('total_supply'),
-                            "balance": json_data['data'].get('balance'),
-                            "buy_30d": json_data['data'].get('buy_30d'),
-                            "sell_30d": json_data['data'].get('sell_30d'),
-                            "sells": json_data['data'].get('sells'),
-                            "unrealized_profit": json_data['data'].get('unrealized_profit'),
-                            "unrealized_pnl": json_data['data'].get('unrealized_pnl'),
-                            "realized_profit": json_data['data'].get('realized_profit'),
-                            "realized_profit_change": json_data['data'].get('realized_profit_change'),
-                            "realized_profit_pnl": json_data['data'].get('realized_profit_pnl'),
-                            "realized_profit_30d": json_data['data'].get('realized_profit_30d'),
-                            "realized_pnl_30d": json_data['data'].get('realized_pnl_30d'),
-                            "total_trade": json_data['data'].get('total_trade'),
-                            "total_profit": json_data['data'].get('total_profit'),
-                            "total_profit_pnl": json_data['data'].get('total_profit_pnl'),
-                            "total_pnl": json_data['data'].get('total_pnl'),
-                            "avg_cost": json_data['data'].get('avg_cost'),
-                            "history_avg_cost": json_data['data'].get('history_avg_cost'),
-                            "history_bought_cost": json_data['data'].get('history_bought_cost'),
-                            "history_bought_amount": json_data['data'].get('history_bought_amount'),
-                            "buy_cost": json_data['data'].get('buy_cost'),
-                            "sold_usd": json_data['data'].get('sold_usd'),
-                            "history_sold_income": json_data['data'].get('history_sold_income'),
-                            "avg_sold": json_data['data'].get('avg_sold'),
-                            "hot_level": json_data['data'].get('hot_level'),
-                            "price": json_data['data'].get('price'),
-                            "price_24h": json_data['data'].get('price_24h'),
-                            "trades": json_data['data'].get('trades', []),
-                            "pnl": json_data['data'].get('pnl'),
-                            "maker_info": json_data['data'].get('maker_info', {}),
-                            "gas_eth": json_data['data'].get('gas_eth'),
-                            "gas_usd": json_data['data'].get('gas_usd'),
-                            "holding_cost": json_data['data'].get('holding_cost'),
-                            "amount_percentage": json_data['data'].get('amount_percentage'),
-                            "market_cap": json_data['data'].get('market_cap'),
-                            "last_active_timestamp": json_data['data'].get('last_active_timestamp'),
-                            "start_holding_at": json_data['data'].get('start_holding_at'),
-                            "end_holding_at": json_data['data'].get('end_holding_at')
-                        }
-                    }
-                else:
-                    logger.error(f"GMGN API returned error: {json_data.get('msg')}")
-                    return None
-    except aiohttp.ClientError as e:
-        logger.error(f"Error getting wallet token stats from GMGN: {e}")
+        client = get_gmgn_client()
+        
+        # Validate period
+        valid_periods = ['1d', '7d', '30d']
+        if period not in valid_periods:
+            logger.warning(f"Invalid period {period}, using 7d")
+            period = '7d'
+        
+        @async_wrap
+        def fetch():
+            return client.getWalletInfo(walletAddress=wallet_address, period=period)
+        
+        data = await fetch()
+        
+        if not data or not isinstance(data, dict):
+            logger.warning(f"No data returned for wallet: {wallet_address}")
+            return None
+        
+        # Map to expected format (some fields may not be available)
+        result = {
+            'pnl': float(data.get('pnl', 0.0)),
+            'realized_pnl': float(data.get('realized_profit', 0.0)),
+            'unrealized_pnl': float(data.get('unrealized_profit', 0.0)),
+            'total_trades': int(data.get('total_trades', 0)),
+            'winrate': float(data.get('winrate', 0.0)),
+        }
+        
+        logger.info(f"✅ Wallet stats fetched for {wallet_address[:8]}...")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting wallet stats via wrapper: {e}")
         return None
 
 async def save_token_info(token_info: Dict[str, Any]) -> bool:
