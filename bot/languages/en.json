@@ -1,5 +1,15 @@
 {
     "welcome_message": "Hello <b>{}</b>! 👋\nWelcome to my bot.",
     "language": "🇺🇸 English",
-    "credits": "👨‍💻 TUF Coding"
+    "credits": "👨‍💻 TUF Coding",
+    "pnl_command_description": "Check wallet PNL",
+    "pnl_response_title": "💰 Wallet PNL Report (7 Days)",
+    "pnl_wallet_info": "Wallet: <b>{}</b> ({})",
+    "pnl_period": "Period: Last {} days",
+    "pnl_total": "Total Realized PNL: {} SOL",
+    "pnl_transactions": "Total Transactions: {}",
+    "pnl_token_details": "Token Details:",
+    "pnl_token_entry": "• <b>{}</b>: {} SOL (Buy: {}, Sell: {})",
+    "pnl_no_data": "No PNL data available for this period.",
+    "pnl_error": "Error calculating PNL: {}"
 }

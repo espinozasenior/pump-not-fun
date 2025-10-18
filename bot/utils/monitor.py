@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, UTC
 from pyrogram import Client
 import aiohttp
 from bot.utils.wallet import check_multiple_wallets
-from bot.utils.token import get_token_info
+from bot.utils.token import get_token_info, get_wallet_token_stats
 from bot.messages.messages import forward_message
 
 async def create_swap_webhook(webhook_url: str, addresses: list[str], auth_header: str = None) -> bool:
@@ -156,10 +156,12 @@ async def process_webhook(request_data: dict, client: Client):
                         logger.error(f"Failed to get token info for mint: {token.get('mint')}")
                         return
                     
+                    pnl_data = await get_wallet_token_stats(wallet.address, token_info.get('mint'))
                     wallet_info = {
                         "name": wallet.name,
                         "address": wallet.address,
-                        "description": f"""🟢 Bought {token.get('tokenAmount', 0):.2f} of {token_info.get('profile').get('name')} in PUMPFUN💊"""
+                        "description": f"""🟢 Bought {token.get('tokenAmount', 0):.2f} of {token_info.get('profile').get('name')} in PUMPFUN💊""",
+                        "pnl": pnl_data
                     }
                     await forward_message(client, None, token_info, HOMIES_CHAT_ID, wallet_info)
                 else:
@@ -199,15 +201,16 @@ async def process_webhook(request_data: dict, client: Client):
                     description += f" for {amount_b:.2f} "
                     description += "SOL" if token_b.get("mint") == SOL_MINT else f"**{token_name}**"
                     description += "\n"
-
+                    pnl_data = await get_wallet_token_stats(wallet.address, token_info.get('mint'))
                     wallet_info = {
                         "name": wallet.name,
                         "address": wallet.address,
-                        "description": description
+                        "description": description,
+                        "pnl": pnl_data
                     }
                     await forward_message(client, None, token_info, HOMIES_CHAT_ID, wallet_info)
             except Exception as e:
-                logger.error(f"Error getting token info: {str(e)}")
+                logger.error(f"Error process_webhook: {str(e)}")
                 return None
     except Exception as e:
         logger.error(f"Webhook processing error: {str(e)}")

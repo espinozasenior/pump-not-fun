@@ -1,5 +1,15 @@
 {
     "welcome_message": "Hola <b>{}</b>! 👋\nBienvenido al bot.",
     "language": "🇪🇸 Español",
-    "credits": "👨‍💻 TUF Coding"
+    "credits": "👨‍💻 TUF Coding",
+    "pnl_transactions": "Missing Text",
+    "pnl_command_description": "Missing Text",
+    "pnl_wallet_info": "Missing Text",
+    "pnl_error": "Missing Text",
+    "pnl_token_details": "Missing Text",
+    "pnl_token_entry": "Missing Text",
+    "pnl_response_title": "Missing Text",
+    "pnl_period": "Missing Text",
+    "pnl_no_data": "Missing Text",
+    "pnl_total": "Missing Text"
 }
