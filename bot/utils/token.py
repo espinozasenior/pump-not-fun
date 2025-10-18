@@ -30,29 +30,74 @@ quote_params = {
     "direction": "desc",
     "size": "300",
 }
+
+# Updated headers to better mimic real browser requests
 headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
     "Referer": "https://gmgn.ai/",
     "Origin": "https://gmgn.ai",
-    "Accept": "application/json",
-    "Accept-Language": "en-US,en;q=0.9",
     "Connection": "keep-alive",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Ch-Ua": '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"macOS"',
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
+
+# Global session for connection pooling
+_session: Optional[aiohttp.ClientSession] = None
+
+async def get_session() -> aiohttp.ClientSession:
+    """Get or create a shared aiohttp session with connection pooling"""
+    global _session
+    if _session is None or _session.closed:
+        timeout = aiohttp.ClientTimeout(total=30, connect=10)
+        connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ttl_dns_cache=300)
+        _session = aiohttp.ClientSession(
+            timeout=timeout,
+            connector=connector,
+            headers=headers
+        )
+    return _session
+
+async def close_session():
+    """Close the global session"""
+    global _session
+    if _session and not _session.closed:
+        await _session.close()
+        _session = None
 
 async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
     quote_url = f"{GMGN_BASE_URL}/tokens/top_holders/sol/{token}"
-    try:
-        async with aiohttp.ClientSession() as session:
+    max_retries = 2
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            session = await get_session()
             async with session.get(
                 quote_url,
-                headers=headers,
                 params=quote_params,
-                timeout=10
+                ssl=False  # May help with some Cloudflare issues
             ) as response:
+                if response.status == 403:
+                    logger.warning(f"Access forbidden (403) for top_holders. Attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay * (attempt + 1))
+                        continue
+                    return None
+                    
                 if response.status == 422:
                     error_data = await response.json()
-                    logger.error(f"Jupiter quote API validation error: {error_data}")
+                    logger.error(f"API validation error: {error_data}")
                     return None
+                    
                 response.raise_for_status()
                 json_data = await response.json()
                 # Assuming the JSON data is stored in a variable called 'data'
@@ -122,26 +167,46 @@ async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
                     'same_address_funded': same_address_funded,
                     'common_addresses': common_addresses.to_dict()
                 }
-    except aiohttp.ClientError as e:
-        logger.error(f"Error getting quote from Jupiter: {e}")
-        return None
+        except aiohttp.ClientError as e:
+            logger.warning(f"Attempt {attempt + 1} failed for top_holders: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay * (attempt + 1))
+                continue
+            logger.error(f"All retries failed for top_holders: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in get_top_holders: {e}")
+            return None
+    
+    return None
 
 
 async def get_token_profile(token: str) -> Optional[Dict[str, Any]]:
     quote_url = f"https://gmgn.ai/api/v1/mutil_window_token_info"
-    try:
-        async with aiohttp.ClientSession() as session:
+    max_retries = 2
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            session = await get_session()
             async with session.post(
                 quote_url,
-                headers=headers,
                 params=quote_params,
                 json={"chain":"sol","addresses":[token]},
-                timeout=10
+                ssl=False
             ) as response:
+                if response.status == 403:
+                    logger.warning(f"Access forbidden (403) for token_profile. Attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay * (attempt + 1))
+                        continue
+                    return None
+                    
                 if response.status == 422:
                     error_data = await response.json()
-                    logger.error(f"Jupiter quote API validation error: {error_data}")
+                    logger.error(f"API validation error: {error_data}")
                     return None
+                    
                 response.raise_for_status()
                 json_data = await response.json()
                 # Assuming the JSON data is stored in a variable called 'data'
@@ -160,24 +225,44 @@ async def get_token_profile(token: str) -> Optional[Dict[str, Any]]:
                     'liquidity': float(profile.get('liquidity', 0.0)),
                 }
                 return result
-    except aiohttp.ClientError as e:
-        logger.error(f"Error getting quote from Jupiter: {e}")
-        return None
+        except aiohttp.ClientError as e:
+            logger.warning(f"Attempt {attempt + 1} failed for token_profile: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay * (attempt + 1))
+                continue
+            logger.error(f"All retries failed for token_profile: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in get_token_profile: {e}")
+            return None
+    
+    return None
 
 async def get_token_links(token: str) -> Optional[Dict[str, Any]]:
     quote_url = f"https://gmgn.ai/api/v1/mutil_window_token_link_rug_vote/sol/{token}"
-    try:
-        async with aiohttp.ClientSession() as session:
+    max_retries = 2
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            session = await get_session()
             async with session.get(
                 quote_url,
-                headers=headers,
                 params=quote_params,
-                timeout=10
+                ssl=False
             ) as response:
+                if response.status == 403:
+                    logger.warning(f"Access forbidden (403) for token_links. Attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay * (attempt + 1))
+                        continue
+                    return None
+                    
                 if response.status == 422:
                     error_data = await response.json()
-                    logger.error(f"Jupiter quote API validation error: {error_data}")
+                    logger.error(f"API validation error: {error_data}")
                     return None
+                    
                 response.raise_for_status()
                 json_data = await response.json()
                 # Assuming the JSON data is stored in a variable called 'data'
@@ -196,24 +281,44 @@ async def get_token_links(token: str) -> Optional[Dict[str, Any]]:
                     'telegram': link_data.get('telegram', '').strip(),
                     'github': link_data.get('github', '').strip()
                 }
-    except aiohttp.ClientError as e:
-        logger.error(f"Error getting quote from Jupiter: {e}")
-        return None
+        except aiohttp.ClientError as e:
+            logger.warning(f"Attempt {attempt + 1} failed for token_links: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay * (attempt + 1))
+                continue
+            logger.error(f"All retries failed for token_links: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in get_token_links: {e}")
+            return None
+    
+    return None
     
 async def get_token_stats(token: str) -> Optional[Dict[str, Any]]:
     quote_url = f"https://gmgn.ai/api/v1/token_stat/sol/{token}"
-    try:
-        async with aiohttp.ClientSession() as session:
+    max_retries = 2
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            session = await get_session()
             async with session.get(
                 quote_url,
-                headers=headers,
                 params=quote_params,
-                timeout=10
+                ssl=False
             ) as response:
+                if response.status == 403:
+                    logger.warning(f"Access forbidden (403) for token_stats. Attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay * (attempt + 1))
+                        continue
+                    return None
+                    
                 if response.status == 422:
                     error_data = await response.json()
-                    logger.error(f"Jupiter quote API validation error: {error_data}")
+                    logger.error(f"API validation error: {error_data}")
                     return None
+                    
                 response.raise_for_status()
                 json_data = await response.json()
                 # Assuming the JSON data is stored in a variable called 'data'
@@ -226,12 +331,24 @@ async def get_token_stats(token: str) -> Optional[Dict[str, Any]]:
                     'bc_owners_percent': float(stats.get('bluechip_owner_percentage', '').strip()) * 100,
                     'insiders_percent': float(stats.get('top_rat_trader_percentage', '').strip()) * 100
                 }
-    except aiohttp.ClientError as e:
-        logger.error(f"Error getting quote from Jupiter: {e}")
-        return None
+        except aiohttp.ClientError as e:
+            logger.warning(f"Attempt {attempt + 1} failed for token_stats: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay * (attempt + 1))
+                continue
+            logger.error(f"All retries failed for token_stats: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in get_token_stats: {e}")
+            return None
+    
+    return None
 
 async def get_token_info(token: str) -> Optional[Dict]:
     try:
+        # Add delay between gathering to avoid rate limiting
+        await asyncio.sleep(0.5)
+        
         # Run all requests concurrently
         results = await asyncio.gather(
             get_top_holders(token),
@@ -241,16 +358,28 @@ async def get_token_info(token: str) -> Optional[Dict]:
             return_exceptions=True
         )
         
-        # Check if any request failed
+        # Check if any request raised an exception
         if any(isinstance(result, Exception) for result in results):
-            logger.error("One or more requests failed")
+            exceptions = [r for r in results if isinstance(r, Exception)]
+            logger.error(f"One or more requests raised exceptions: {exceptions}")
             return None
             
         holders, links, stats, profile = results
         
-        # Validate required data
-        if not all([holders, links, stats]):
-            logger.error("Missing required token data")
+        # Check which data is available - be more lenient
+        missing_parts = []
+        if not holders:
+            missing_parts.append("holders")
+        if not links:
+            missing_parts.append("links")
+        if not stats:
+            missing_parts.append("stats")
+        if not profile:
+            missing_parts.append("profile")
+            
+        if missing_parts:
+            logger.error(f"GMGN API blocked - Missing token data: {', '.join(missing_parts)}")
+            logger.info("This is likely due to Cloudflare protection. Consider using alternative data sources or proxies.")
             return None
             
         return {
