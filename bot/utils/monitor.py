@@ -150,6 +150,12 @@ async def process_webhook(request_data: dict, client: Client):
                     # Format message details
                     token = txn.get("tokenTransfers", {})[0]
                     token_info = await get_token_info(token.get("mint", None))
+                    
+                    # Check if token_info is valid
+                    if not token_info:
+                        logger.error(f"Failed to get token info for mint: {token.get('mint')}")
+                        return
+                    
                     wallet_info = {
                         "name": wallet.name,
                         "address": wallet.address,
@@ -173,6 +179,12 @@ async def process_webhook(request_data: dict, client: Client):
                     token_b = txn.get("tokenTransfers", {})[length - 1]
 
                     token_info = await get_token_info(token_a.get("mint") if token_a.get("mint") != SOL_MINT else token_b.get("mint"))
+                    
+                    # Check if token_info is valid
+                    if not token_info:
+                        logger.error(f"Failed to get token info for swap")
+                        return
+                    
                     # Determine if buying or selling based on token types
                     is_buying = token_a.get("mint") == SOL_MINT
                     amount_a = token_a.get("tokenAmount", 0)
