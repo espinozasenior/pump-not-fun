@@ -21,7 +21,58 @@ async def forward_message(client: Client, message: Message, token_info: dict, ch
             logger.error(f"Forward error: {e}")
 
 
+def format_wallet_token_pnl(wallet: dict) -> str:
+    if wallet.get('pnl') is None:
+        return "No data available"
+    return f"""
+    **Wallet Token PNL:**
+
+  Trades: {wallet.get('pnl').get('data', '').get('total_trade', 0)}
+  **TXs (30d)**
+  🟢{wallet.get('pnl').get('data' '').get('buy_30d', 0)} | 🔴{wallet.get('pnl').get('data', '').get('sell_30d', 0)}
+
+  **Total Profit:**
+  {
+    f"🔴 -${abs(safe_float(wallet.get('pnl').get('data', '').get('realized_profit', 0))):.2f}" 
+    if safe_float(wallet.get('pnl').get('data').get('realized_profit', 0)) < 0 
+    else f"🟢 +${safe_float(wallet.get('pnl').get('data').get('realized_profit', 0)):.2f}"
+  }({
+    f"{safe_float(wallet.get('pnl').get('data').get('total_pnl', 0)) * 100:.2f}%" 
+    if safe_float(wallet.get('pnl').get('data').get('total_pnl', 0)) < 0
+    else f"+{safe_float(wallet.get('pnl').get('data').get('total_pnl', 0)) * 100:.2f}%"
+  })
+
+  **Unrealized:**
+  {
+    f"🔴 -${abs(safe_float(wallet.get('pnl').get('data').get('unrealized_profit', 0))):.2f}" 
+    if safe_float(wallet.get('pnl').get('data').get('unrealized_profit', 0)) < 0 
+    else f"🟢 +${safe_float(wallet.get('pnl').get('data').get('unrealized_profit', 0)):.2f}"
+  }({
+    f"{safe_float(wallet.get('pnl').get('data').get('unrealized_pnl', 0)) * 100:.2f}%" 
+    if safe_float(wallet.get('pnl').get('data').get('unrealized_pnl', 0)) < 0
+    else f"+{safe_float(wallet.get('pnl').get('data').get('unrealized_pnl', 0)) * 100:.2f}%"
+  })
+
+  **Balance:**
+  ${wallet.get('pnl').get('data').get('holding_cost', 0)}
+
+  **Bought/Sold**
+  ${safe_float(wallet.get('pnl').get('data').get('history_bought_cost', 0.0)):.2f} | ${safe_float(wallet.get('pnl').get('data').get('history_sold_income', 0.0)):.2f}
+
+  **Avg Cost/Sold**
+  ${safe_float(wallet.get('pnl').get('data').get('history_avg_cost', 0.0)):.4f} | ${safe_float(wallet.get('pnl').get('data').get('avg_sold', 0.0)):.4f}
+"""
+
 def format_forward_message(token_info: dict, wallet: dict = None) -> str:
+    # Helper function to safely convert values to float
+    def safe_float(value, default=0.0):
+        if value is None:
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+            
     return f"""**#{wallet['name'] if wallet['name'] else "N/A"}** { wallet['description'] if wallet['description'] else "" }
 
 📌**CA:** `{token_info.get('profile').get('ca', 'N/A')}`
@@ -48,7 +99,9 @@ Symbol: **{token_info.get('profile').get('symbol', 'N/A')}**
     - Telegram: {token_info.get('links').get('telegram', 'N/A')}
     - Github: {token_info.get('links').get('github', 'N/A')}
     - Website: {token_info.get('links').get('website', 'N/A')}
-    """
+
+{ format_wallet_token_pnl(token_info.get('pnl'))}
+"""
 
 async def user_in_chat_message_handler(_:Client, message:Message):
     # Expresión regular para capturar el token

@@ -383,6 +383,7 @@ async def get_token_info(token: str) -> Optional[Dict]:
             return None
             
         return {
+            "mint": token,
             "holders": holders,
             "links": links,
             "stats": stats,
@@ -393,6 +394,90 @@ async def get_token_info(token: str) -> Optional[Dict]:
         logger.error(f"Error getting token info: {e}")
         return None
     
+async def get_wallet_token_stats(wallet_address: str, token_address: str, period: str = '1d') -> Optional[Dict[str, Any]]:
+    quote_url = f"{GMGN_BASE_URL}/smartmoney/sol/walletstat/{wallet_address}"
+    
+    # Update params with token address and period
+    params = quote_params.copy()
+    params.update({
+        "token_address": token_address,
+        "period": period
+    })
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                quote_url,
+                headers=headers,
+                params=params,
+                timeout=10
+            ) as response:
+                if response.status == 422:
+                    error_data = await response.json()
+                    logger.error(f"GMGN API validation error: {error_data}")
+                    return None
+                response.raise_for_status()
+                json_data = await response.json()
+                
+                # Return the complete response structure with code, message, and data
+                if json_data.get('code') == 0 and json_data.get('msg') == 'success':
+                    return {
+                        "code": json_data.get('code'),
+                        "msg": json_data.get('msg'),
+                        "data": {
+                            "token_address": json_data['data'].get('token_address'),
+                            "name": json_data['data'].get('name'),
+                            "symbol": json_data['data'].get('symbol'),
+                            "decimals": json_data['data'].get('decimals'),
+                            "logo": json_data['data'].get('logo'),
+                            "launchpad": json_data['data'].get('launchpad'),
+                            "total_supply": json_data['data'].get('total_supply'),
+                            "balance": json_data['data'].get('balance'),
+                            "buy_30d": json_data['data'].get('buy_30d'),
+                            "sell_30d": json_data['data'].get('sell_30d'),
+                            "sells": json_data['data'].get('sells'),
+                            "unrealized_profit": json_data['data'].get('unrealized_profit'),
+                            "unrealized_pnl": json_data['data'].get('unrealized_pnl'),
+                            "realized_profit": json_data['data'].get('realized_profit'),
+                            "realized_profit_change": json_data['data'].get('realized_profit_change'),
+                            "realized_profit_pnl": json_data['data'].get('realized_profit_pnl'),
+                            "realized_profit_30d": json_data['data'].get('realized_profit_30d'),
+                            "realized_pnl_30d": json_data['data'].get('realized_pnl_30d'),
+                            "total_trade": json_data['data'].get('total_trade'),
+                            "total_profit": json_data['data'].get('total_profit'),
+                            "total_profit_pnl": json_data['data'].get('total_profit_pnl'),
+                            "total_pnl": json_data['data'].get('total_pnl'),
+                            "avg_cost": json_data['data'].get('avg_cost'),
+                            "history_avg_cost": json_data['data'].get('history_avg_cost'),
+                            "history_bought_cost": json_data['data'].get('history_bought_cost'),
+                            "history_bought_amount": json_data['data'].get('history_bought_amount'),
+                            "buy_cost": json_data['data'].get('buy_cost'),
+                            "sold_usd": json_data['data'].get('sold_usd'),
+                            "history_sold_income": json_data['data'].get('history_sold_income'),
+                            "avg_sold": json_data['data'].get('avg_sold'),
+                            "hot_level": json_data['data'].get('hot_level'),
+                            "price": json_data['data'].get('price'),
+                            "price_24h": json_data['data'].get('price_24h'),
+                            "trades": json_data['data'].get('trades', []),
+                            "pnl": json_data['data'].get('pnl'),
+                            "maker_info": json_data['data'].get('maker_info', {}),
+                            "gas_eth": json_data['data'].get('gas_eth'),
+                            "gas_usd": json_data['data'].get('gas_usd'),
+                            "holding_cost": json_data['data'].get('holding_cost'),
+                            "amount_percentage": json_data['data'].get('amount_percentage'),
+                            "market_cap": json_data['data'].get('market_cap'),
+                            "last_active_timestamp": json_data['data'].get('last_active_timestamp'),
+                            "start_holding_at": json_data['data'].get('start_holding_at'),
+                            "end_holding_at": json_data['data'].get('end_holding_at')
+                        }
+                    }
+                else:
+                    logger.error(f"GMGN API returned error: {json_data.get('msg')}")
+                    return None
+    except aiohttp.ClientError as e:
+        logger.error(f"Error getting wallet token stats from GMGN: {e}")
+        return None
+
 async def save_token_info(token_info: Dict[str, Any]) -> bool:
     try:
         from database.database import AsyncSessionFactory
