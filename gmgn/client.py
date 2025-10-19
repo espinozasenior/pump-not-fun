@@ -430,3 +430,38 @@ class gmgn:
         else:
             return jsonResponse
     
+    def getWalletOnTokenStats(self, walletAddress: str = None, contractAddress: str = None) -> dict:
+        """
+        Gets comprehensive wallet statistics for a specific token including profit/loss,
+        trading history, holding information, and financial metrics.
+        
+        Args:
+            walletAddress (str): The wallet address to analyze
+            contractAddress (str): The token contract address to get stats for
+        
+        Returns:
+            dict: Wallet statistics data containing:
+                - Financial metrics: holding_cost, unrealized_profit, unrealized_pnl, 
+                  realized_profit, realized_profit_change, realized_profit_pnl, total_profit
+                - Trading data: trades array with timestamp, side, quantity, price
+                - Token info: name, symbol, decimals, logo, balance
+                - Performance: buy/sell counts, profit percentages, average costs
+        """
+        self.randomiseRequest()
+        if not walletAddress:
+            return "You must input a wallet address."
+        if not contractAddress:
+            return "You must input a contract address."
+        
+        url = f"https://gmgn.ai/defi/quotation/v1/smartmoney/sol/walletstat/{walletAddress}?token_address={contractAddress}"
+
+        request = self.sendRequest.get(url, headers=self.headers)
+
+        jsonResponse = request.json()
+        
+        # Return the data object from the response
+        if jsonResponse.get('data'):
+            return jsonResponse['data']
+        else:
+            return jsonResponse
+    
