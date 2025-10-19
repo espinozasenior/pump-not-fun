@@ -367,3 +367,66 @@ class gmgn:
         else:
             return jsonResponse
     
+    def getTokenHolders(self, contractAddress: str = None, limit: int = None, cost: int = None, 
+                       tag: str = None, orderby: str = None, direction: str = None) -> dict:
+        """
+        Gets token holders information including their balances, profits, and wallet tags.
+        
+        Args:
+            contractAddress (str): The token contract address
+            limit (int): Maximum number of holders to return (default: 100)
+            cost (int): Cost parameter for filtering (default: 20)
+            tag (str): Wallet tag filter. Options: 'renowned', 'smart_degen', etc. (default: 'renowned')
+            orderby (str): Field to order by. Options: 'amount_percentage', 'balance', 'profit', etc. (default: 'amount_percentage')
+            direction (str): Sort direction. Options: 'desc', 'asc' (default: 'desc')
+        
+        Returns:
+            list: List of token holders with their detailed information
+        """
+        self.randomiseRequest()
+        if not contractAddress:
+            return "You must input a contract address."
+        
+        # Set default values
+        if limit is None:
+            limit = 100
+        if cost is None:
+            cost = 20
+        if tag is None:
+            tag = "renowned"
+        if orderby is None:
+            orderby = "amount_percentage"
+        if direction is None:
+            direction = "desc"
+        
+        # Validate parameters
+        valid_directions = ['desc', 'asc']
+        if direction not in valid_directions:
+            return f"Invalid direction: {direction}. Valid options: {valid_directions}"
+        
+        valid_orderby = ['amount_percentage', 'balance', 'profit', 'usd_value', 'cost_cur']
+        if orderby not in valid_orderby:
+            return f"Invalid orderby: {orderby}. Valid options: {valid_orderby}"
+        
+        # Build URL with query parameters
+        url = f"https://gmgn.ai/vas/api/v1/token_holders/sol/{contractAddress}"
+        params = [
+            f"limit={limit}",
+            f"cost={cost}",
+            f"tag={tag}",
+            f"orderby={orderby}",
+            f"direction={direction}"
+        ]
+        
+        url += "?" + "&".join(params)
+
+        request = self.sendRequest.get(url, headers=self.headers)
+
+        jsonResponse = request.json()
+        
+        # Return the list array from the response data
+        if jsonResponse.get('data') and jsonResponse['data'].get('list'):
+            return jsonResponse['data']['list']
+        else:
+            return jsonResponse
+    
