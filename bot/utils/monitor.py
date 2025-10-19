@@ -149,18 +149,23 @@ async def process_webhook(request_data: dict, client: Client):
                         return 
                     # Format message details
                     token = txn.get("tokenTransfers", {})[0]
-                    token_info = await get_token_info(token.get("mint", None))
+                    token_mint = token.get("mint", None)
+                    
+                    token_info = await get_token_info(token_mint)
                     
                     # Check if token_info is valid
                     if not token_info:
-                        logger.error(f"Failed to get token info for mint: {token.get('mint')}")
+                        logger.error(f"Failed to get token info for mint: {token_mint}")
                         return
                     
-                    pnl_data = await get_wallet_token_stats(wallet.address, token_info.get('mint'))
+                    # Safely get token name
+                    token_name = token_info.get('profile', {}).get('name', 'Unknown')
+                    
+                    pnl_data = await get_wallet_token_stats(wallet.address, token_mint)
                     wallet_info = {
                         "name": wallet.name,
                         "address": wallet.address,
-                        "description": f"""🟢 Bought {token.get('tokenAmount', 0):.2f} of {token_info.get('profile').get('name')} in PUMPFUN💊""",
+                        "description": f"""🟢 Bought {token.get('tokenAmount', 0):.2f} of {token_name} in PUMPFUN💊""",
                         "pnl": pnl_data
                     }
                     await forward_message(client, None, token_info, HOMIES_CHAT_ID, wallet_info)
@@ -180,7 +185,10 @@ async def process_webhook(request_data: dict, client: Client):
                     token_a = txn.get("tokenTransfers", {})[0]
                     token_b = txn.get("tokenTransfers", {})[length - 1]
 
-                    token_info = await get_token_info(token_a.get("mint") if token_a.get("mint") != SOL_MINT else token_b.get("mint"))
+                    # Get the token mint address
+                    token_mint = token_a.get("mint") if token_a.get("mint") != SOL_MINT else token_b.get("mint")
+                    
+                    token_info = await get_token_info(token_mint)
                     
                     # Check if token_info is valid
                     if not token_info:
@@ -191,6 +199,8 @@ async def process_webhook(request_data: dict, client: Client):
                     is_buying = token_a.get("mint") == SOL_MINT
                     amount_a = token_a.get("tokenAmount", 0)
                     amount_b = token_b.get("tokenAmount", 0)
+                    
+                    # Safely get token name
                     token_name = token_info.get('profile', {}).get('name', 'Unknown')
 
                     if is_buying:
@@ -201,7 +211,8 @@ async def process_webhook(request_data: dict, client: Client):
                     description += f" for {amount_b:.2f} "
                     description += "SOL" if token_b.get("mint") == SOL_MINT else f"**{token_name}**"
                     description += "\n"
-                    pnl_data = await get_wallet_token_stats(wallet.address, token_info.get('mint'))
+                    
+                    pnl_data = await get_wallet_token_stats(wallet.address, token_mint)
                     wallet_info = {
                         "name": wallet.name,
                         "address": wallet.address,

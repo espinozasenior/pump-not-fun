@@ -253,18 +253,44 @@ async def get_token_links(token: str) -> Optional[Dict[str, Any]]:
                 'twitter': '',
                 'website': '',
                 'telegram': '',
-                'github': ''
+                'github': '',
+                'discord': '',
+                'description': '',
+                'gmgn': '',
+                'geckoterminal': '',
+                'facebook': '',
+                'instagram': '',
+                'linkedin': '',
+                'medium': '',
+                'reddit': '',
+                'tiktok': '',
+                'youtube': '',
+                'bitbucket': '',
+                'verify_status': 0
             }
         
-        # Extract social links - ALL NOW AVAILABLE!
+        # Extract ALL available links and metadata
         result = {
             'twitter': data.get('twitter_username', '').strip(),
             'website': data.get('website', '').strip(),
             'telegram': data.get('telegram', '').strip(),
-            'github': data.get('github', '').strip()
+            'github': data.get('github', '').strip(),
+            'discord': data.get('discord', '').strip(),
+            'description': data.get('description', '').strip(),
+            'gmgn': data.get('gmgn', '').strip(),
+            'geckoterminal': data.get('geckoterminal', '').strip(),
+            'facebook': data.get('facebook', '').strip(),
+            'instagram': data.get('instagram', '').strip(),
+            'linkedin': data.get('linkedin', '').strip(),
+            'medium': data.get('medium', '').strip(),
+            'reddit': data.get('reddit', '').strip(),
+            'tiktok': data.get('tiktok', '').strip(),
+            'youtube': data.get('youtube', '').strip(),
+            'bitbucket': data.get('bitbucket', '').strip(),
+            'verify_status': int(data.get('verify_status', 0))
         }
         
-        logger.info(f"✅ Token links fetched for {token[:8]}... (Twitter: {result['twitter']})")
+        logger.info(f"✅ Token links fetched for {token[:8]}... (Twitter: {result['twitter']}, Website: {result['website']})")
         return result
         
     except Exception as e:

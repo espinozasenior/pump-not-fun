@@ -10,10 +10,13 @@ from bot.keyboards.keyboards import get_buy_button
 
 async def forward_message(client: Client, message: Message, token_info: dict, chat_id: int, wallet_info: dict = None):
         try:
+            # Safely get contract address
+            ca = token_info.get('profile', {}).get('ca', 'N/A') if token_info else 'N/A'
+            
             msg = await client.send_message(
                 chat_id=chat_id,
                 text=format_forward_message(token_info, wallet_info),
-                reply_markup=get_buy_button(token_info.get('profile').get('ca', 'N/A')),
+                reply_markup=get_buy_button(ca),
                 disable_web_page_preview=False
             )
             logger.debug(f"Forwarded message: {msg.id} / link {msg.link}")
