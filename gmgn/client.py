@@ -254,6 +254,33 @@ class gmgn:
 
         return jsonResponse
     
+    def getTokenLinks(self, contractAddress: str = None) -> dict:
+        """
+        Gets token social links and additional information.
+        
+        Args:
+            contractAddress (str): The token contract address
+        
+        Returns:
+            dict: Token links including twitter, website, telegram, github, discord, 
+                  description, and rug vote data
+        """
+        self.randomiseRequest()
+        if not contractAddress:
+            return "You must input a contract address."
+        
+        url = f"https://gmgn.ai/api/v1/mutil_window_token_link_rug_vote/sol/{contractAddress}"
+
+        request = self.sendRequest.get(url, headers=self.headers)
+
+        jsonResponse = request.json()
+        
+        # Return the link data from the response
+        if jsonResponse.get('data') and jsonResponse['data'].get('link'):
+            return jsonResponse['data']['link']
+        else:
+            return jsonResponse
+    
     def getWalletInfo(self, walletAddress: str = None, period: str = None) -> dict:
         """
         Gets various information about a wallet address.

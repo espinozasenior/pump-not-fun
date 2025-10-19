@@ -81,12 +81,31 @@ async def get_token_stats(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 async def get_token_links(token: str) -> Optional[Dict[str, Any]]:
-    return {
-        'twitter': '',
-        'website': '',
-        'telegram': '',
-        'github': ''
-    }
+    try:
+        client = get_gmgn_client()
+        
+        @async_wrap
+        def fetch_links():
+            return client.getTokenLinks(contractAddress=token)
+        
+        data = await fetch_links()
+        
+        if not data or not isinstance(data, dict):
+            return {
+                'twitter': '',
+                'website': '',
+                'telegram': '',
+                'github': ''
+            }
+        
+        return {
+            'twitter': data.get('twitter_username', '').strip(),
+            'website': data.get('website', '').strip(),
+            'telegram': data.get('telegram', '').strip(),
+            'github': data.get('github', '').strip()
+        }
+    except Exception as e:
+        return None
 
 async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
     try:

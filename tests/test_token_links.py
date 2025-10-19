@@ -22,19 +22,36 @@ def async_wrap(func):
 def get_gmgn_client():
     return gmgn()
 
-# Define the function we're testing
+# Define the function we're testing - COMPLETE VERSION with getTokenLinks()
 async def get_token_links(token: str) -> Optional[Dict[str, Any]]:
-    """Get token social links using gmgnai-wrapper"""
+    """Get token social links using gmgnai-wrapper - COMPLETE with getTokenLinks()"""
     try:
-        # For now, return empty links as the endpoint doesn't provide this data
+        client = get_gmgn_client()
+        
+        @async_wrap
+        def fetch_links():
+            return client.getTokenLinks(contractAddress=token)
+        
+        data = await fetch_links()
+        
+        if not data or not isinstance(data, dict):
+            print(f"⚠️  No links data returned from gmgn wrapper for token: {token}")
+            return {
+                'twitter': '',
+                'website': '',
+                'telegram': '',
+                'github': ''
+            }
+        
+        # Extract social links - ALL NOW AVAILABLE!
         result = {
-            'twitter': '',
-            'website': '',
-            'telegram': '',
-            'github': ''
+            'twitter': data.get('twitter_username', '').strip(),
+            'website': data.get('website', '').strip(),
+            'telegram': data.get('telegram', '').strip(),
+            'github': data.get('github', '').strip()
         }
         
-        print(f"⚠️  Token links not available from gmgn wrapper (returning empty)")
+        print(f"✅ Token links fetched for {token[:8]}... (Twitter: {result['twitter']})")
         return result
         
     except Exception as e:
