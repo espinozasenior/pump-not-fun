@@ -24,46 +24,50 @@ async def forward_message(client: Client, message: Message, token_info: dict, ch
             logger.error(f"Forward error: {e}")
 
 
-def format_wallet_token_pnl(wallet: dict) -> str:
-    if wallet.get('pnl') is None:
-        return "No data available"
+def format_wallet_token_pnl(pnl_data: dict) -> str:
+    """Format wallet PNL data for display - matches get_wallet_token_stats() structure"""
+    if pnl_data is None:
+        return "\n📊 **Wallet PNL:** No data available"
+    
+    # Helper function to safely convert values to float
+    def safe_float(value, default=0.0):
+        if value is None:
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
+    # New structure from get_wallet_token_stats() - simple flat structure
+    pnl = safe_float(pnl_data.get('pnl', 0.0))
+    realized_pnl = safe_float(pnl_data.get('realized_pnl', 0.0))
+    unrealized_pnl = safe_float(pnl_data.get('unrealized_pnl', 0.0))
+    total_trades = int(pnl_data.get('total_trades', 0))
+    winrate = safe_float(pnl_data.get('winrate', 0.0))
+    
     return f"""
-    **Wallet Token PNL:**
+📊 **Wallet PNL:**
 
-  Trades: {wallet.get('pnl').get('data', '').get('total_trade', 0)}
-  **TXs (30d)**
-  🟢{wallet.get('pnl').get('data' '').get('buy_30d', 0)} | 🔴{wallet.get('pnl').get('data', '').get('sell_30d', 0)}
+  Total Trades: {total_trades}
+  Winrate: {winrate:.2f}%
 
-  **Total Profit:**
+  **Realized PNL:**
   {
-    f"🔴 -${abs(safe_float(wallet.get('pnl').get('data', '').get('realized_profit', 0))):.2f}" 
-    if safe_float(wallet.get('pnl').get('data').get('realized_profit', 0)) < 0 
-    else f"🟢 +${safe_float(wallet.get('pnl').get('data').get('realized_profit', 0)):.2f}"
-  }({
-    f"{safe_float(wallet.get('pnl').get('data').get('total_pnl', 0)) * 100:.2f}%" 
-    if safe_float(wallet.get('pnl').get('data').get('total_pnl', 0)) < 0
-    else f"+{safe_float(wallet.get('pnl').get('data').get('total_pnl', 0)) * 100:.2f}%"
-  })
+    f"🔴 -${abs(realized_pnl):.2f}" if realized_pnl < 0 
+    else f"🟢 +${realized_pnl:.2f}"
+  }
 
-  **Unrealized:**
+  **Unrealized PNL:**
   {
-    f"🔴 -${abs(safe_float(wallet.get('pnl').get('data').get('unrealized_profit', 0))):.2f}" 
-    if safe_float(wallet.get('pnl').get('data').get('unrealized_profit', 0)) < 0 
-    else f"🟢 +${safe_float(wallet.get('pnl').get('data').get('unrealized_profit', 0)):.2f}"
-  }({
-    f"{safe_float(wallet.get('pnl').get('data').get('unrealized_pnl', 0)) * 100:.2f}%" 
-    if safe_float(wallet.get('pnl').get('data').get('unrealized_pnl', 0)) < 0
-    else f"+{safe_float(wallet.get('pnl').get('data').get('unrealized_pnl', 0)) * 100:.2f}%"
-  })
+    f"🔴 -${abs(unrealized_pnl):.2f}" if unrealized_pnl < 0 
+    else f"🟢 +${unrealized_pnl:.2f}"
+  }
 
-  **Balance:**
-  ${wallet.get('pnl').get('data').get('holding_cost', 0)}
-
-  **Bought/Sold**
-  ${safe_float(wallet.get('pnl').get('data').get('history_bought_cost', 0.0)):.2f} | ${safe_float(wallet.get('pnl').get('data').get('history_sold_income', 0.0)):.2f}
-
-  **Avg Cost/Sold**
-  ${safe_float(wallet.get('pnl').get('data').get('history_avg_cost', 0.0)):.4f} | ${safe_float(wallet.get('pnl').get('data').get('avg_sold', 0.0)):.4f}
+  **Total PNL:**
+  {
+    f"🔴 -${abs(pnl):.2f}" if pnl < 0 
+    else f"🟢 +${pnl:.2f}"
+  }
 """
 
 def format_forward_message(token_info: dict, wallet: dict = None) -> str:
@@ -103,7 +107,7 @@ Symbol: **{token_info.get('profile').get('symbol', 'N/A')}**
     - Github: {token_info.get('links').get('github', 'N/A')}
     - Website: {token_info.get('links').get('website', 'N/A')}
 
-{ format_wallet_token_pnl(token_info.get('pnl'))}
+{ format_wallet_token_pnl(wallet.get('pnl') if wallet else None)}
 """
 
 async def user_in_chat_message_handler(_:Client, message:Message):
