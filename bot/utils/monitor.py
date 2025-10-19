@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, UTC
 from pyrogram import Client
 import aiohttp
 from bot.utils.wallet import check_multiple_wallets
-from bot.utils.token import get_token_info, get_wallet_token_stats
+from bot.utils.token import get_token_info, get_wallet_stats
 from bot.messages.messages import forward_message
 
 async def create_swap_webhook(webhook_url: str, addresses: list[str], auth_header: str = None) -> bool:
@@ -161,7 +161,7 @@ async def process_webhook(request_data: dict, client: Client):
                     # Safely get token name
                     token_name = token_info.get('profile', {}).get('name', 'Unknown')
                     
-                    pnl_data = await get_wallet_token_stats(wallet.address, token_mint)
+                    pnl_data = await get_wallet_stats(wallet.address, period='7d')
                     wallet_info = {
                         "name": wallet.name,
                         "address": wallet.address,
@@ -212,7 +212,7 @@ async def process_webhook(request_data: dict, client: Client):
                     description += "SOL" if token_b.get("mint") == SOL_MINT else f"**{token_name}**"
                     description += "\n"
                     
-                    pnl_data = await get_wallet_token_stats(wallet.address, token_mint)
+                    pnl_data = await get_wallet_stats(wallet.address, period='7d')
                     wallet_info = {
                         "name": wallet.name,
                         "address": wallet.address,

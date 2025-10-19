@@ -25,7 +25,7 @@ async def forward_message(client: Client, message: Message, token_info: dict, ch
 
 
 def format_wallet_token_pnl(pnl_data: dict) -> str:
-    """Format wallet PNL data for display - matches get_wallet_token_stats() structure"""
+    """Format wallet PNL data for display - matches get_wallet_stats() structure"""
     if pnl_data is None:
         return "\n📊 **Wallet PNL:** No data available"
     

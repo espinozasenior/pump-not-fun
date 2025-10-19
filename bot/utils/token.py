@@ -376,8 +376,8 @@ async def get_token_info(token: str) -> Optional[Dict]:
         logger.error(f"Error getting token info: {e}")
         return None
     
-async def get_wallet_token_stats(wallet_address: str, token_address: str, period: str = '7d') -> Optional[Dict[str, Any]]:
-    """Get wallet stats using gmgnai-wrapper"""
+async def get_wallet_stats(wallet_address: str, period: str = '7d') -> Optional[Dict[str, Any]]:
+    """Get general wallet statistics using gmgnai-wrapper (across all tokens)"""
     try:
         client = get_gmgn_client()
         
@@ -397,7 +397,7 @@ async def get_wallet_token_stats(wallet_address: str, token_address: str, period
             logger.warning(f"No data returned for wallet: {wallet_address}")
             return None
         
-        # Map to expected format (some fields may not be available)
+        # Map to expected format
         result = {
             'pnl': float(data.get('pnl', 0.0)),
             'realized_pnl': float(data.get('realized_profit', 0.0)),
@@ -406,7 +406,7 @@ async def get_wallet_token_stats(wallet_address: str, token_address: str, period
             'winrate': float(data.get('winrate', 0.0)),
         }
         
-        logger.info(f"✅ Wallet stats fetched for {wallet_address[:8]}...")
+        logger.info(f"✅ Wallet stats fetched for {wallet_address[:8]}... (PNL: ${result['pnl']:.2f})")
         return result
         
     except Exception as e:

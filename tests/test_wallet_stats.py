@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test get_wallet_token_stats with gmgn wrapper - Standalone"""
+"""Test get_wallet_stats with gmgn wrapper - Standalone"""
 import sys
 import asyncio
 from pathlib import Path
@@ -22,9 +22,9 @@ def async_wrap(func):
 def get_gmgn_client():
     return gmgn()
 
-# Define the function we're testing
-async def get_wallet_token_stats(wallet_address: str, token_address: str, period: str = '7d') -> Optional[Dict[str, Any]]:
-    """Get wallet stats using gmgnai-wrapper"""
+# Define the function we're testing - RENAMED
+async def get_wallet_stats(wallet_address: str, period: str = '7d') -> Optional[Dict[str, Any]]:
+    """Get general wallet statistics using gmgnai-wrapper (across all tokens)"""
     try:
         client = get_gmgn_client()
         
@@ -44,7 +44,7 @@ async def get_wallet_token_stats(wallet_address: str, token_address: str, period
             print(f"⚠️  No data returned for wallet: {wallet_address}")
             return None
         
-        # Map to expected format (some fields may not be available)
+        # Map to expected format
         result = {
             'pnl': float(data.get('pnl', 0.0)),
             'realized_pnl': float(data.get('realized_profit', 0.0)),
@@ -53,7 +53,7 @@ async def get_wallet_token_stats(wallet_address: str, token_address: str, period
             'winrate': float(data.get('winrate', 0.0)),
         }
         
-        print(f"✅ Wallet stats fetched for {wallet_address[:8]}...")
+        print(f"✅ Wallet stats fetched for {wallet_address[:8]}... (PNL: ${result['pnl']:.2f})")
         return result
         
     except Exception as e:
@@ -63,16 +63,15 @@ async def get_wallet_token_stats(wallet_address: str, token_address: str, period
         return None
 
 async def test_wallet_stats():
-    # Use your wallet address
+    # Use your wallet address - token parameter removed
     wallet = "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj"
-    token = "5dpN5wMH8j8au29Rp91qn4WfNq6t6xJfcjQNcFeDJ8Ct"
     
-    print(f"Testing get_wallet_token_stats()")
+    print(f"Testing get_wallet_stats()")
     print(f"  Wallet: {wallet}")
-    print(f"  Token: {token}")
+    print(f"  Period: 7d")
     print("=" * 60)
     
-    result = await get_wallet_token_stats(wallet, token, period='7d')
+    result = await get_wallet_stats(wallet, period='7d')
     
     if result:
         print("✅ SUCCESS! Wallet stats retrieved:")
