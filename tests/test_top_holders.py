@@ -23,29 +23,29 @@ def async_wrap(func):
 def get_gmgn_client():
     return gmgn()
 
-# Define the function we're testing
+# Define the function we're testing - ENHANCED VERSION
 async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
-    """Get top holders analysis using gmgnai-wrapper"""
+    """Get top holders analysis using gmgnai-wrapper - ENHANCED with getTokenHolders()"""
     try:
         client = get_gmgn_client()
         
         @async_wrap
         def fetch():
-            return client.getTopBuyers(contractAddress=token)
+            return client.getTokenHolders(
+                contractAddress=token,
+                limit=100,
+                cost=20,
+                orderby="amount_percentage",
+                direction="desc"
+            )
         
         data = await fetch()
         
-        if not data or 'holders' not in data or 'holderInfo' not in data['holders']:
-            print(f"⚠️  No top buyers data for token: {token}")
+        if not data or not isinstance(data, list):
+            print(f"⚠️  No holders data for token: {token}")
             return None
         
-        # Get holderInfo list
-        holder_list = data['holders']['holderInfo']
-        
-        if not holder_list:
-            return None
-        
-        df = pd.DataFrame(holder_list)
+        df = pd.DataFrame(data)
         
         if df.empty:
             return None
@@ -57,32 +57,33 @@ async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
             "AeBwztwXScyNNuQCEdhS54wttRQrw3Nj1UtqddzB4C7b",
         }
         
-        # Analysis - note: field names may differ from old API
+        # Analysis with new data structure
         fresh_wallets = df['is_new'].sum() if 'is_new' in df else 0
-        sold_wallets = len(df[df['status'] == 'sold']) if 'status' in df else 0
+        sold_wallets = (df['sell_tx_count_cur'] > 0).sum() if 'sell_tx_count_cur' in df else 0
         suspicious_wallets = df['is_suspicious'].sum() if 'is_suspicious' in df else 0
         
-        insiders_count = df['maker_token_tags'].apply(
-            lambda tags: 'rat_trader' in tags if isinstance(tags, list) else False
-        ).sum() if 'maker_token_tags' in df else 0
+        # Check for wallet tags in wallet_tag_v2 field
+        insiders_count = df['wallet_tag_v2'].apply(
+            lambda tag: 'rat_trader' in tag if isinstance(tag, str) else False
+        ).sum() if 'wallet_tag_v2' in df else 0
         
-        phishing_count = df['maker_token_tags'].apply(
-            lambda tags: 'transfer_in' in tags if isinstance(tags, list) else False
-        ).sum() if 'maker_token_tags' in df else 0
+        phishing_count = df['wallet_tag_v2'].apply(
+            lambda tag: 'transfer_in' in tag if isinstance(tag, str) else False
+        ).sum() if 'wallet_tag_v2' in df else 0
         
         profitable_wallets = (df['profit'] > 0).sum() if 'profit' in df else 0
         
         mask = df['cost_cur'] > 0 if 'cost_cur' in df else pd.Series([False] * len(df))
         profit_percent = (df[mask]['profit'] / df[mask]['cost_cur']).mean() * 100 if mask.any() else 0.0
         
-        # Same address funding
+        # Same address funding - using account_address
         same_address_funded = 0
         common_addresses = {}
         
-        if 'native_transfer' in df:
+        if 'account_address' in df:
             from_address_counts = (
-                df['native_transfer']
-                .apply(lambda x: x.get('from_address') if isinstance(x, dict) and x.get('from_address') not in EXCLUDED_ADDRESSES else None)
+                df['account_address']
+                .apply(lambda addr: addr if addr not in EXCLUDED_ADDRESSES else None)
                 .value_counts(dropna=True)
             )
             same_address_funded = from_address_counts[from_address_counts > 1].sum()
@@ -100,7 +101,7 @@ async def get_top_holders(token: str) -> Optional[Dict[str, Any]]:
             'common_addresses': common_addresses
         }
         
-        print(f"✅ Top holders analyzed for {token[:8]}...")
+        print(f"✅ Top holders analyzed for {token[:8]}... ({len(df)} holders)")
         return result
         
     except Exception as e:

@@ -22,32 +22,30 @@ def async_wrap(func):
 def get_gmgn_client():
     return gmgn()
 
-# Define the function we're testing
+# Define the function we're testing - ENHANCED VERSION
 async def get_token_stats(token: str) -> Optional[Dict[str, Any]]:
-    """Get token statistics using gmgnai-wrapper"""
+    """Get token statistics using gmgnai-wrapper - ENHANCED with getTokenStats()"""
     try:
         client = get_gmgn_client()
         
         @async_wrap
-        def fetch_holders():
-            return client.getTopBuyers(contractAddress=token)
+        def fetch_stats():
+            return client.getTokenStats(contractAddress=token)
         
-        data = await fetch_holders()
+        data = await fetch_stats()
         
-        if not data or 'holders' not in data:
-            print(f"⚠️  No data returned from gmgn wrapper for token: {token}")
+        if not data or not isinstance(data, dict):
+            print(f"⚠️  No stats data returned from gmgn wrapper for token: {token}")
             return None
         
-        holder_info = data.get('holders', {})
-        
-        # Extract statistics
+        # Extract statistics - NOW WITH REAL DATA!
         stats = {
-            'holders': int(holder_info.get('holder_count', 0)),
-            'bc_owners_percent': 0.0,  # Not available from this endpoint
-            'insiders_percent': 0.0     # Not available from this endpoint
+            'holders': int(data.get('holder_count', 0)),
+            'bc_owners_percent': float(data.get('bluechip_owner_percentage', 0.0)) * 100,
+            'insiders_percent': float(data.get('top_rat_trader_percentage', 0.0)) * 100
         }
         
-        print(f"✅ Token stats fetched for {token[:8]}...")
+        print(f"✅ Token stats fetched for {token[:8]}... (BC: {stats['bc_owners_percent']:.2f}%, Insiders: {stats['insiders_percent']:.2f}%)")
         return stats
         
     except Exception as e:
