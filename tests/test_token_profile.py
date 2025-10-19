@@ -43,6 +43,9 @@ async def get_token_profile(token: str) -> Optional[Dict[str, Any]]:
             fetch_holders(),
             return_exceptions=True
         )
+
+        print(f"price_data: {price_data}")
+        print(f"holders_data: {holders_data}")
         
         if isinstance(price_data, Exception) or isinstance(holders_data, Exception):
             print(f"❌ Failed to fetch token data: price={price_data}, holders={holders_data}")

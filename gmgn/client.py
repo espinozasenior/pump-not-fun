@@ -49,18 +49,28 @@ class gmgn:
 
     def getTokenInfo(self, contractAddress: str) -> dict:
         """
-        Gets info on a token.
+        Gets comprehensive info on a token using the multi-window token info endpoint.
+        Returns the first token data from the response array.
         """
         self.randomiseRequest()
         if not contractAddress:
             return "You must input a contract address."
-        url = f"{self.BASE_URL}/v1/tokens/sol/{contractAddress}"
+        
+        url = "https://gmgn.ai/api/v1/mutil_window_token_info"
+        payload = {
+            "chain": "sol",
+            "addresses": [contractAddress]
+        }
 
-        request = self.sendRequest.get(url, headers=self.headers)
+        request = self.sendRequest.post(url, headers=self.headers, json=payload)
 
         jsonResponse = request.json()
-
-        return jsonResponse
+        
+        # Return the first element from the data array
+        if jsonResponse.get('data') and len(jsonResponse['data']) > 0:
+            return jsonResponse['data'][0]
+        else:
+            return jsonResponse
     
     def getNewPairs(self, limit: int = None) -> dict:
         """
@@ -279,6 +289,23 @@ class gmgn:
             period = "7d"
 
         url = f"{self.BASE_URL}/v1/rank/sol/wallets/{walletAddress}/unique_token_7d?interval={period}"
+        request = self.sendRequest.get(url, headers=self.headers)
+
+        jsonResponse = request.json()['data']
+
+        return jsonResponse
+    
+    def getTokenStats(self, contractAddress: str = None) -> dict:
+        """
+        Gets comprehensive statistics about a token including holder count, 
+        bluechip ownership, bot activity, and fresh wallet metrics.
+        """
+        self.randomiseRequest()
+        if not contractAddress:
+            return "You must input a contract address."
+        
+        url = f"https://gmgn.ai/api/v1/token_stat/sol/{contractAddress}"
+
         request = self.sendRequest.get(url, headers=self.headers)
 
         jsonResponse = request.json()['data']
