@@ -312,3 +312,58 @@ class gmgn:
 
         return jsonResponse
     
+    def getTokenTrends(self, contractAddress: str = None, trends_types: list = None) -> dict:
+        """
+        Gets token trend data including average holding balance, holder count, 
+        and top holder percentages over time.
+        
+        Args:
+            contractAddress (str): The token contract address
+            trends_types (list): List of trend types to retrieve. Options:
+                - 'avg_holding_balance': Average holding balance over time
+                - 'holder_count': Number of holders over time  
+                - 'top10_holder_percent': Top 10 holders percentage over time
+                - 'top100_holder_percent': Top 100 holders percentage over time
+                If None, all trend types will be retrieved.
+        
+        Returns:
+            dict: The trends object containing time-series data for requested metrics
+        """
+        self.randomiseRequest()
+        if not contractAddress:
+            return "You must input a contract address."
+        
+        # Default to all available trend types if none specified
+        if not trends_types:
+            trends_types = [
+                'avg_holding_balance',
+                'holder_count', 
+                'top10_holder_percent',
+                'top100_holder_percent'
+            ]
+        
+        # Validate trend types
+        valid_trends = ['avg_holding_balance', 'holder_count', 'top10_holder_percent', 'top100_holder_percent']
+        for trend_type in trends_types:
+            if trend_type not in valid_trends:
+                return f"Invalid trend type: {trend_type}. Valid options: {valid_trends}"
+        
+        # Build URL with trend type parameters
+        url = f"https://gmgn.ai/api/v1/token_trends/sol/{contractAddress}"
+        params = []
+        for trend_type in trends_types:
+            params.append(f"trends_type={trend_type}")
+        
+        if params:
+            url += "?" + "&".join(params)
+
+        request = self.sendRequest.get(url, headers=self.headers)
+
+        jsonResponse = request.json()
+        
+        # Return the trends object from the response data
+        if jsonResponse.get('data') and jsonResponse['data'].get('trends'):
+            return jsonResponse['data']['trends']
+        else:
+            return jsonResponse
+    
