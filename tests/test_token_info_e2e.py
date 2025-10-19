@@ -25,44 +25,36 @@ def get_gmgn_client():
 
 # Import refactored functions from test files
 async def get_token_profile(token: str) -> Optional[Dict[str, Any]]:
-    """Get token profile using gmgnai-wrapper - combines multiple endpoints"""
+    """Get token profile using gmgnai-wrapper - COMPLETE with getTokenInfo()"""
     try:
         client = get_gmgn_client()
         
+        # Use the updated getTokenInfo() endpoint - has EVERYTHING!
         @async_wrap
-        def fetch_price():
-            return client.getTokenUsdPrice(contractAddress=token)
+        def fetch_info():
+            return client.getTokenInfo(contractAddress=token)
         
-        @async_wrap
-        def fetch_holders():
-            return client.getTopBuyers(contractAddress=token)
+        data = await fetch_info()
         
-        price_data, holders_data = await asyncio.gather(
-            fetch_price(),
-            fetch_holders(),
-            return_exceptions=True
-        )
-        
-        if isinstance(price_data, Exception) or isinstance(holders_data, Exception):
+        if not data or not isinstance(data, dict):
             return None
         
-        if not price_data or not holders_data:
-            return None
+        # Extract data from response - ALL fields now available!
+        price_data = data.get('price', {})
+        dev_data = data.get('dev', {})
         
-        holder_info = holders_data.get('holders', {})
-        status_now = holder_info.get('statusNow', {})
-        
+        # Map to expected format - NOW COMPLETE!
         return {
             'ca': token,
-            'holders': int(holder_info.get('holder_count', 0)),
-            'symbol': '',
-            'logo': '',
-            'name': '',
-            'price': float(price_data.get('usd_price', 0.0)),
-            'top_10_holder_rate': float(status_now.get('top_10_holder_rate', 0.0)) * 100,
-            'volume_1h': 0.0,
-            'volume_5m': 0.0,
-            'liquidity': 0.0,
+            'holders': int(data.get('holder_count', 0)),
+            'symbol': data.get('symbol', ''),
+            'logo': data.get('logo', ''),
+            'name': data.get('name', ''),
+            'price': float(price_data.get('price', 0.0)) if price_data else 0.0,
+            'top_10_holder_rate': float(dev_data.get('top_10_holder_rate', 0.0)) * 100 if dev_data else 0.0,
+            'volume_1h': float(price_data.get('volume_1h', 0.0)) if price_data else 0.0,
+            'volume_5m': float(price_data.get('volume_5m', 0.0)) if price_data else 0.0,
+            'liquidity': float(data.get('liquidity', 0.0)),
         }
     except Exception as e:
         return None
